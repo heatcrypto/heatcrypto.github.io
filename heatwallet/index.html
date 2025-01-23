@@ -1,10 +1,158 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Test</title>
-</head>
-<body>
-<h1>Hello World!</h1>
-</body>
+<html lang="en" ng-controller="AppController as app" class="loading hide-live-agent" ng-strict-di>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes">
+    <meta http-equiv="Last-Modified" content="2025-01-23">
+    <title>Heatwallet 4.5.2</title>
+    <style>
+      html, body { height: 100%; }
+      md-input-container .md-errors-spacer { min-height: 0; }
+      md-sidenav { max-width: 280px !important; }
+      md-toolbar.main-toolbar .md-toolbar-tools { height: inherit !important; }
+    </style>
+    <style>html.loading .application-content{display:none}html .application-loading-animation-container{display:none;text-align:center}html.loading .application-loading-animation-container{display:block}#application-loading-text-container{margin-top:20px;color:#9E9E9E}html.loading body{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center}html.loading .spinner{-webkit-animation:rotator 1.4s linear infinite;animation:rotator 1.4s linear infinite}@-webkit-keyframes rotator{0%{-webkit-transform:rotate(0);transform:rotate(0)}100%{-webkit-transform:rotate(270deg);transform:rotate(270deg)}}@keyframes rotator{0%{-webkit-transform:rotate(0);transform:rotate(0)}100%{-webkit-transform:rotate(270deg);transform:rotate(270deg)}}html.loading .path{stroke-dasharray:187;stroke-dashoffset:0;-webkit-transform-origin:center;transform-origin:center;-webkit-animation:dash 1.4s ease-in-out infinite,colors 5.6s ease-in-out infinite;animation:dash 1.4s ease-in-out infinite,colors 5.6s ease-in-out infinite}@-webkit-keyframes colors{0%,100%{stroke:#4285F4}25%{stroke:#DE3E35}50%{stroke:#F7C223}75%{stroke:#1B9A59}}@keyframes colors{0%,100%{stroke:#4285F4}25%{stroke:#DE3E35}50%{stroke:#F7C223}75%{stroke:#1B9A59}}@-webkit-keyframes dash{0%{stroke-dashoffset:187}50%{stroke-dashoffset:46.75;-webkit-transform:rotate(135deg);transform:rotate(135deg)}100%{stroke-dashoffset:187;-webkit-transform:rotate(450deg);transform:rotate(450deg)}}@keyframes dash{0%{stroke-dashoffset:187}50%{stroke-dashoffset:46.75;-webkit-transform:rotate(135deg);transform:rotate(135deg)}100%{stroke-dashoffset:187;-webkit-transform:rotate(450deg);transform:rotate(450deg)}}</style>
+    <script>!function(n){function e(){angular.element(document).find("html").removeClass("loading")}var t=3e3;document.addEventListener("DOMContentLoaded",function(){var o=Date.now();o-n>t?e():setTimeout(e,t-(o-n))})}(Date.now());</script>
+
+  </head>
+  <body>
+
+    <div class="application-loading-animation-container" hide show-gt-xs>
+      <div>
+        <svg class="spinner" width="65px" height="65px" viewBox="0 0 66 66" xmlns="http://www.w3.org/2000/svg">
+          <circle class="path" fill="none" stroke-width="6" stroke-linecap="round" cx="33" cy="33" r="30"></circle>
+        </svg>
+      </div>
+      <div id="application-loading-text-container">Loading Heat Wallet&nbsp;<elipses-loading></elipses-loading></div>
+    </div>
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto+Sans:400,500,700">
+    <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto'>
+<!--    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">-->
+    <link rel="stylesheet" href="material-5f4ccf54f4.css"/>
+    <!-- custom css -->
+    <link rel="stylesheet" href="styles/index-dXQgg9.css">
+
+    <div layout="column" flex layout-fill class="application-content" ng-if="showApp">
+      <div flex layout-fill layout="column">
+        <downloading-blockchain></downloading-blockchain>
+        <toolbar></toolbar>
+        <div ng-viewport flex layout-fill layout="column"></div>
+      </div>
+    </div>
+
+    <!-- Google Addwords Conversion tracker runs in its separated domain for security reasons-->
+    <!-- <iframe src="https://heatwallet.com/secure-addwords-iframe.html"
+      style="width:0; height:0; border:0; border:none" id="secure-addwords-iframe"
+      sandbox="allow-scripts"></iframe>
+    <script>
+      /**
+       * We call the global gtag method which in turn calls the google gtag function
+       * which was loaded in the shielded off iframe, the only way to talk to the iframe
+       * is through sending message events for which the iframe is listening.
+       *
+       * @param message { type: [signup|bid], transaction_id: string }
+       * */
+      function gtag_SECURE(message) {
+        let win = document.getElementById('secure-addwords-iframe').contentWindow
+        win.postMessage(message, '*')
+      }
+      function gtag_report_conversion_bid_SECURE(url, transaction_id) {
+        gtag_SECURE({type:'bid', transaction_id: Date.now()+''})
+      }
+      function gtag_report_conversion_signup_SECURE(url) {
+        gtag_SECURE({type:'signup'})
+      }
+    </script> -->
+
+    <!-- Or alternatively we can use the version where the tracker code runs in the SECURE context -->
+    <!-- <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+        console.log('gtag', arguments)
+      }
+      gtag('js', new Date());
+      gtag('config', 'AW-876749157');
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-876749157"></script>
+    <script>
+      function gtag_report_conversion_bid(url, transaction_id) {
+        var callback = function () {
+          if (typeof (url) != 'undefined') {
+            window.location = url;
+          }
+        };
+        gtag('event', 'conversion', {
+          'send_to': 'AW-876749157/hwIsCOPB1IABEOXCiKID',
+          'transaction_id': transaction_id,
+          'event_callback': callback
+        });
+        return false;
+      }
+    </script>
+    <script>
+      function gtag_report_conversion_signup(url) {
+        var callback = function () {
+          if (typeof (url) != 'undefined') {
+            window.location = url;
+          }
+        };
+        gtag('event', 'conversion', {
+          'send_to': 'AW-876749157/_PMbCNml1IABEOXCiKID',
+          'event_callback': callback
+        });
+        return false;
+      }
+    </script> -->
+
+  </body>
+
+  <script type="text/ng-template" id="error-messages">
+    <div ng-message="required">This field is required</div>
+    <div ng-message="minlength">This field is too short</div>
+    <div ng-message="parse">Invalid contents</div>
+  </script>
+
+  <!-- NOTE! In order to NOT have the core modules load in a different way when
+       loaded in Electron (nodejs) env as compared to loading in a browser env.
+       We hide the window.require and window.module at the start of
+       node_modules.js and restore them at the end. -->
+
+  <script defer src="node_modules-da8a47d290.js"></script>
+
+  <!-- <script src="../node_modules/heat-libs/dist/heat-libs.umd.js" defer></script> -->
+
+  <script defer src="charting-731fcdbfa7.js"></script>
+
+  <script defer src="lib-ngzYgx.js" defer></script>
+  <script defer src="tshelpers-7Pbl5P.js" defer></script>
+  <script defer src="heat-ui-KFQgnf.js" defer></script>
+  <script type="text/javascript">
+    document.addEventListener("DOMContentLoaded", function() {
+      new heat.Loader();
+
+      // /* TEST THE TAGS */
+      // gtag({type:'signup'})
+      // gtag({type:'bid', transaction_id: Date.now()+''})
+    });
+  </script>
+  <script type="text/javascript" defer>
+    /*
+    document.addEventListener("DOMContentLoaded", function() {
+      (function(d, src, c) { var t=d.scripts[d.scripts.length - 1],s=d.createElement('script');s.id='la_x2s6df8d';s.async=true;s.src=src;s.onload=s.onreadystatechange=function(){var rs=this.readyState;if(rs&&(rs!='complete')&&(rs!='loaded')){return;}c(this);};t.parentElement.insertBefore(s,t.nextSibling);})(document,
+      'https://heatledger.ladesk.com/scripts/track.js',
+      function(e){
+        var button = LiveAgent.createButton('837d4f1c', e);
+        angular.element(document).find('head').append(`
+          <style type="text/css">
+            html.hide-live-agent #${button.elementId} {
+              display: none;
+            }
+          </style>
+        `);
+      });
+    });
+    */
+  </script>
 </html>
