@@ -254,883 +254,6 @@ function RouteConfig() {
             }]);
     };
 }
-var dialogs;
-(function (dialogs) {
-    function about($event) {
-        var settings = heat.$inject.get('settings');
-        var env = heat.$inject.get('env');
-        dialogs.dialog({
-            id: 'about',
-            title: 'About',
-            targetEvent: $event,
-            template: "\n        <p>{{vm.applicationName}} {{vm.applicationVersion}}<br>Build date: {{vm.applicationBuild}}</p>\n        <p>HEAT server {{vm.heatServerVersion}}<br>Build date: {{vm.heatServerBuildDate}}</p>\n        <p><a href=\"#\" ng-click=\"vm.goTo('main')\">Go to MAIN NET</a></p>\n        <p><a href=\"#\" ng-click=\"vm.goTo('test')\">Go to TEST NET</a></p>\n<!--        <p><a href=\"#\" ng-click=\"vm.goTo('beta')\">Go to BETA NET</a></p>-->\n        <p>\n<!--            <a ng-href=\"{{vm.benchmarkUrl}}\" target=\"_blank\" rel=\"noopener noreferrer\">BENCHMARK application</a><br/>-->\n            <a href=\"#\" ng-click=\"vm.goTo('bench')\">BENCHMARK application</a>\n        </p>\n        <br>\n        <p>Ethereum API <u>Powered by <a href=\"https://ethplorer.io\">Ethplorer.io</a></u></p>\n        <!--\n        <p><button onclick=\"gtag_report_conversion_signup(undefined)\">Signup Test</button></p>\n        <p><button onclick=\"gtag_report_conversion_bid(undefined, Date.now()+'')\">Bid Test</button></p>\n        <p><button onclick=\"gtag_report_conversion_signup_SECURE(undefined)\">Signup Test [SECURE]</button></p>\n        <p><button onclick=\"gtag_report_conversion_bid_SECURE(undefined, Date.now()+'')\">Bid Test [SECURE]</button></p>\n        -->\n\n      ",
-            locals: {
-                applicationName: settings.get(SettingsService.APPLICATION_NAME),
-                applicationVersion: settings.get(SettingsService.APPLICATION_VERSION),
-                applicationBuild: settings.get(SettingsService.APPLICATION_BUILD),
-                heatServerVersion: SettingsService.EMBEDDED_HEATLEDGER_VERSION,
-                heatServerBuildDate: SettingsService.EMBEDDED_HEATLEDGER_BUILD_DATE,
-                isTestnet: window.localStorage.getItem('testnet') == 'true',
-                benchmarkUrl: SettingsService.BENCHMARK_WEB_URL,
-                isEnvNodeJS: env.type == EnvType.NODEJS,
-                goTo: function (target) {
-                    window.localStorage.setItem('testnet', 'false');
-                    window.localStorage.setItem('betanet', 'false');
-                    if (target == 'test') {
-                        window.localStorage.setItem('testnet', 'true');
-                    }
-                    else if (target == 'beta') {
-                        window.localStorage.setItem('betanet', 'true');
-                    }
-                    else if (target == 'bench') {
-                        if (env.type == EnvType.NODEJS) {
-                            var BrowserWindow = require('electron').remote.BrowserWindow;
-                            var benchWindow_1 = new BrowserWindow({
-                                width: 1200,
-                                height: 800,
-                                webPreferences: {
-                                    nodeIntegration: false
-                                },
-                                show: false,
-                                backgroundColor: '#d22424'
-                            });
-                            benchWindow_1.once('ready-to-show', function () {
-                                benchWindow_1.show();
-                            });
-                            benchWindow_1.loadURL(SettingsService.BENCHMARK_WEB_URL);
-                        }
-                        else {
-                            window.location.assign(SettingsService.BENCHMARK_WEB_URL);
-                        }
-                        return;
-                    }
-                    window.location.reload();
-                }
-            }
-        });
-    }
-    dialogs.about = about;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function assetInfo($event, info) {
-        var assetInfoService = heat.$inject.get('assetInfo');
-        var unsafeWarning = "This asset is operated by a third party.\nHeat Ledger has no control over the asset and does not provide support for it.\nIt's possible the asset does NOT represent what you think it does.\nPlease ensure from asset issuer that the asset is valid before purchasing it, as there may be no refunds or redemptions available.\nAsset purchases are non-refundable.";
-        assetInfoService.getAssetDescription(info).then(function (description) {
-            var orderFeePercentage = parseInt(info.orderFee || '0') / 1000000;
-            var tradeFeePercentage = parseInt(info.tradeFee || '0') / 1000000;
-            var feeRecipient = (info.feeRecipient || '0') == '0' ? info.issuer : info.feeRecipient;
-            info.expired = utils.isAssetExpired(info.expiration);
-            dialogs.dialog({
-                id: 'assetInfo',
-                title: 'Asset Info',
-                targetEvent: $event,
-                cancelButton: false,
-                locals: {
-                    description: description,
-                    info: info,
-                    unsafeWarning: unsafeWarning,
-                    createdDate: utils.timestampToDate(info.timestamp).toLocaleString(),
-                    expirationDate: info.expiration == 0
-                        ? "no expiration"
-                        : (info.expiration ? utils.timestampToDate(info.expiration).toLocaleString() : null),
-                    orderFeePercentage: parseInt(info.orderFee || '0') / 1000000,
-                    tradeFeePercentage: parseInt(info.tradeFee || '0') / 1000000,
-                    feeRecipient: (info.feeRecipient || '0') == '0' ? info.issuer : info.feeRecipient
-                },
-                style: "\n          .grey {\n            color: darkgrey;\n          }\n        ",
-                template: "\n          <div layout=\"column\">\n            <span ng-if=\"!vm.info.certified\">{{vm.unsafeWarning}}<br><br></span>\n            <span><b>{{vm.info.symbol}}</b> {{vm.info.name}}</span>\n            <p class=\"grey\" ng-if=\"vm.info.type==1\">\n              <span>PRIVATE ASSET</span><br/>\n              Order fee: {{vm.orderFeePercentage}}% &nbsp;&nbsp;&nbsp;Trade fee: {{vm.tradeFeePercentage}}% &nbsp;&nbsp;&nbsp;Fee recipient: {{vm.feeRecipient}}\n            </p>\n            <p class=\"grey\">\n                id: {{vm.info.id}} &nbsp;&nbsp;&nbsp; decimals: {{vm.info.decimals}}<br/>\n                created: {{vm.createdDate}}<br/>\n                expiration: {{vm.expirationDate || \"-\"}} &nbsp;&nbsp;<b>{{vm.info.expired ? \"EXPIRED\" : \"\"}}</b><br/>\n                issuer: {{vm.info.issuerPublicName || vm.info.issuer}}\n            </p>\n            <pre>{{vm.description}}</pre>\n          </div>\n        "
-            });
-        });
-    }
-    dialogs.assetInfo = assetInfo;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function blockDetails($event, blockId) {
-        var $q = heat.$inject.get('$q');
-        var heatApi = heat.$inject.get('heat');
-        var deferred = $q.defer();
-        heatApi.api.getBlock(blockId, true).then(function (response) {
-            var sumofamounts = new Big("0");
-            response.transactions.forEach(function (transaction) {
-                sumofamounts = sumofamounts.add(new Big(transaction.amount));
-            });
-            dialogs.dialog({
-                id: 'blockDetails',
-                title: 'Block details',
-                targetEvent: $event,
-                cancelButton: false,
-                locals: {
-                    blockId: blockId,
-                    height: response.height,
-                    baseTarget: response.baseTarget,
-                    numberOfTransactions: response.numberOfTransactions,
-                    generator: response.generator,
-                    posRewardHQT: response.posRewardHQT,
-                    popRewardHQT: response.popRewardHQT,
-                    sumofamounts: utils.commaFormat(utils.formatQNT(sumofamounts.toString(), 8)) + ' HEAT',
-                    transactions: response.transactions,
-                    showTransactionDetails: function ($event, transaction) {
-                        dialogs.transactionDetails($event, transaction);
-                    }
-                },
-                style: "\n         .dialog-block-details td {\n            padding: 8px;\n         }\n         .dialog-block-details ul {\n            list-style-type: none;\n            padding-left: 0px;\n            margin-left: 0px;\n         }\n         .dialog-block-details ul li {\n            padding-bottom: 5px;\n         }\n         .dialog-block-details .link-block {\n            cursor: pointer;\n            color: #3b5998;\n            text-decoration: underline;\n          }\n        ",
-                template: "\n           <div layout=\"column\" class=\"dialog-block-details\">\n             <table>\n               <tr><td>Block id</td><td>{{vm.blockId}}</td></tr>\n               <tr><td>Block height</td><td>{{vm.height}}</td></tr>\n               <tr><td>Base target</td><td>{{vm.baseTarget}}</td></tr>\n               <tr><td>Number of transactions</td><td>{{vm.numberOfTransactions}}</td></tr>\n               <tr><td>Generator</td><td>{{vm.generator}}</td></tr>\n               <tr><td>POS reward</td><td>{{vm.posRewardHQT}}</td></tr>\n               <tr><td>POP reward</td><td>{{vm.popRewardHQT}}</td></tr>\n               <tr><td>Total HEAT transferred</td><td>{{vm.sumofamounts}}</td></tr>\n               <tr ng-if=\"vm.transactions.length\"><td>Transactions</td>\n                <td>\n                  <ul>\n                    <li ng-repeat=\"trans in vm.transactions\" ng-click=\"vm.showTransactionDetails($event, trans)\" class=\"link-block\">{{trans.transaction}}</li>\n                  </ul>\n                </td>\n               </tr>\n             </table>\n           </div>\n         "
-            }).then(deferred.resolve, deferred.reject);
-        });
-        return deferred.promise;
-    }
-    dialogs.blockDetails = blockDetails;
-})(dialogs || (dialogs = {}));
-var QRCode;
-var dialogs;
-(function (dialogs) {
-    function depositAsset($event, assetInfo) {
-        var http = heat.$inject.get('http');
-        var user = heat.$inject.get('user');
-        var $q = heat.$inject.get('$q');
-        var clipboard = heat.$inject.get('clipboard');
-        var localKeyStore = heat.$inject.get('localKeyStore');
-        var env = heat.$inject.get('env');
-        var account = user.account, publicKey = user.publicKey;
-        var noteOne = "Deposit address is associated with account HEAT ".concat(account, " and public key ").concat(publicKey);
-        var url = "https://heatwallet.com/getaddr.cgi?heataccount=".concat(account, "&publickey=").concat(publicKey, "&aid=").concat(assetInfo.id);
-        var deferred = $q.defer();
-        http.get(url).then(function (response) {
-            var parsed = angular.isString(response) ? JSON.parse(response) : response;
-            dialogs.dialog({
-                id: 'depositAsset',
-                title: "Deposit ".concat(assetInfo.symbol),
-                targetEvent: $event,
-                okButton: true,
-                style: "\n          .qrcodeBox {\n            margin:10px;\n          }\n        ",
-                template: "\n          <div>\n            <p>{{vm.symbol}} Deposit address <b id=\"deposit-dialog-btc-address-element\">{{vm.address}}</b>&nbsp;<a ng-click=\"vm.copyAddress()\">[copy]</a></p>\n            <p>{{vm.noteOne}}</p>\n            <p><div class=\"qrcodeBox\" id=\"depositeAddressQRCode\"></div></p>\n            <p></p>\n            <p>\n              <div ng-bind-html=\"vm.dialogue\"></div>\n            </p>\n          </div>\n        ",
-                locals: {
-                    noteOne: noteOne,
-                    dialogue: parsed.deposit.dialogue,
-                    isBtc: parsed.deposit.dialogue.includes('5592059897546023466'),
-                    address: parsed.deposit.address,
-                    shorQR: function () {
-                        showQrCodeOnDialogLoad(parsed.deposit.address);
-                    }(),
-                    copyAddress: function () {
-                        clipboard.copyWithUI(document.getElementById('deposit-dialog-btc-address-element'), 'Copied address to clipboard');
-                    },
-                    symbol: assetInfo.symbol
-                }
-            }).then(deferred.resolve, deferred.reject);
-        });
-        return deferred.promise;
-    }
-    dialogs.depositAsset = depositAsset;
-    function showQrCodeOnDialogLoad(data) {
-        setTimeout(function () {
-            new QRCode("depositeAddressQRCode", {
-                text: data,
-                width: 128,
-                height: 128,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        }, 1000);
-    }
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function showEtherDepositDialog($event, address) {
-        var clipboard = heat.$inject.get('clipboard');
-        return dialogs.dialog({
-            id: 'showEtherDepositDialog',
-            title: "Deposit Ether",
-            targetEvent: $event,
-            cancelButton: false,
-            okButton: true,
-            locals: {
-                userEtherWalletAddress: address,
-                copyAddress: function () {
-                    clipboard.copyWithUI(document.getElementById('deposit-dialog-eth-address-element'), 'Copied address to clipboard');
-                }
-            },
-            template: "\n        <div layout=\"column\" flex>\n          Deposit the desired amount of Ether(ETH) to your Ethereum Address\n          <b id=\"deposit-dialog-eth-address-element\"> {{vm.userEtherWalletAddress}} </b>&nbsp;\n          <a ng-click=\"vm.copyAddress()\">[copy]</a>&nbsp;\n        </div>\n      "
-        });
-    }
-    dialogs.showEtherDepositDialog = showEtherDepositDialog;
-})(dialogs || (dialogs = {}));
-heat.Loader.directive('autoFocus', function ($timeout) {
-    'use strict';
-    return {
-        restrict: 'A',
-        link: function (_scope, _element) {
-            $timeout(function () {
-                _element[0].focus();
-            }, 500);
-        }
-    };
-});
-var dialogs;
-(function (dialogs) {
-    function $mdDialog() {
-        return heat.$inject.get('$mdDialog');
-    }
-    dialogs.$mdDialog = $mdDialog;
-    function dialog(options) {
-        if (angular.isString(options.style)) {
-            var styleId = 'dialog-style-' + options.id;
-            if (!document.getElementById(styleId)) {
-                angular.element(document).find('head').append("<style type=\"text/css\" id=\"".concat(styleId, "\">").concat(options.style, "</style>"));
-            }
-        }
-        return dialogs.$mdDialog().show({
-            controller: options.controller || function () { },
-            locals: angular.extend({
-                isBetanet: heat.isBetanet,
-                title: options.title,
-                okButton: angular.isDefined(options.okButton) ? options.okButton : true,
-                cancelButton: options.cancelButton,
-                $mdDialog: dialogs.$mdDialog()
-            }, options.locals || {}),
-            controllerAs: 'vm',
-            bindToController: true,
-            parent: angular.element(document.body),
-            targetEvent: options.targetEvent,
-            template: "\n      <md-dialog>\n        <md-toolbar ng-if=\"vm.isBetanet\" style=\"background-color: #bf112f !important\">\n          <div class=\"md-toolbar-tools\">\n            <h2>B E T A N E T</h2>\n          </div>\n        </md-toolbar>\n        <form name=\"dialogForm\">\n          <md-toolbar>\n            <div class=\"md-toolbar-tools\"><h2>{{vm.title}}</h2></div>\n          </md-toolbar>\n          <md-dialog-content style=\"min-width:500px;max-width:650px\" layout=\"column\" layout-padding>\n            <div flex layout=\"column\">\n              ".concat(options.template, "\n            </div>\n          </md-dialog-content>\n          <md-dialog-actions layout=\"row\">\n            <span flex></span>\n            <md-button ng-if=\"vm.cancelButton\" class=\"md-warn\" ng-click=\"vm.cancelButtonClick ? vm.cancelButtonClick() : vm.$mdDialog.cancel()\" aria-label=\"Cancel\">Cancel</md-button>\n            <md-button type=\"submit\" ng-disabled=\"dialogForm.$invalid\" ng-if=\"vm.okButton\" class=\"md-primary\"\n              ng-click=\"vm.okButtonClick ? vm.okButtonClick() : vm.$mdDialog.hide()\" aria-label=\"OK\">{{vm.okButtonLabel?vm.okButtonLabel:'OK'}}</md-button>\n          </md-dialog-actions>\n        </form>\n      </md-dialog>\n      ")
-        });
-    }
-    dialogs.dialog = dialog;
-    function wizard(options) {
-        if (angular.isString(options.style)) {
-            var styleId = 'wizard-style-' + options.id;
-            if (!document.getElementById(styleId)) {
-                angular.element(document).find('head').append("<style type=\"text/css\" id=\"".concat(styleId, "\">").concat(options.style, "</style>"));
-            }
-        }
-        return dialogs.$mdDialog().show({
-            controller: options.controller || function () { },
-            locals: angular.extend({
-                title: options.title,
-                cancelButton: options.cancelButton,
-                $mdDialog: dialogs.$mdDialog(),
-                pages: options.pages,
-                wizardIndex: 0,
-                goToNextPage: function () {
-                    this.wizardIndex++;
-                    if (angular.isFunction(this.pages[this.wizardIndex].show)) {
-                        this.pages[this.wizardIndex].show(this, this.wizardIndex - 1);
-                    }
-                },
-                goToPreviousPage: function () {
-                    this.wizardIndex--;
-                    if (angular.isFunction(this.pages[this.wizardIndex].show)) {
-                        this.pages[this.wizardIndex].show(this, this.wizardIndex + 1);
-                    }
-                }
-            }, options.locals || {}),
-            controllerAs: 'vm',
-            bindToController: true,
-            parent: angular.element(document.body),
-            targetEvent: options.targetEvent,
-            template: "\n      <md-dialog>\n        <form name=\"dialogForm\">\n          <md-toolbar>\n            <div class=\"md-toolbar-tools\"><h2>{{vm.title}}<span ng-show=\"vm.pages[vm.wizardIndex].title\">{{vm.pages[vm.wizardIndex].title}}</span></h2></div>\n          </md-toolbar>\n          <md-dialog-content style=\"min-width:500px;max-width:600px\" layout=\"column\" layout-padding>\n            <div flex layout=\"column\">\n              ".concat(options.pages.map(function (page, index) {
-                return "<div flex layout=\"column\" ng-if=\"vm.wizardIndex==".concat(index, "\">") +
-                    page.template +
-                    '</div>';
-            }).join(''), "\n            </div>\n          </md-dialog-content>\n          <md-dialog-actions layout=\"row\">\n            <md-button ng-show=\"!vm.hideCancelBtn\"\n                ng-click=\"vm.cancelButtonClick ? vm.cancelButtonClick() : vm.$mdDialog.cancel()\" aria-label=\"Cancel\">Cancel</md-button>\n            <span flex></span>\n            <md-button ng-click=\"vm.goToPreviousPage()\"\n                ng-show=\"vm.wizardIndex>0 && !vm.hideBackBtn\" aria-label=\"Back\">Back</md-button>\n            <md-button ng-disabled=\"dialogForm.$invalid\"\n                ng-show=\"vm.wizardIndex < (vm.pages.length-1)\"\n                ng-click=\"vm.goToNextPage()\" aria-label=\"Continue\">{{vm.pages[vm.wizardIndex].continueBtnLabel||'Continue'}}</md-button>\n            <md-button ng-disabled=\"dialogForm.$invalid\"\n                ng-show=\"vm.wizardIndex == (vm.pages.length-1) && !vm.hideOkBtn\"\n                ng-click=\"vm.okButtonClick ? vm.okButtonClick() : vm.$mdDialog.hide()\" aria-label=\"Ok\">{{vm.pages[vm.wizardIndex].okBtnLabel||'Ok'}}</md-button>\n          </md-dialog-actions>\n        </form>\n      </md-dialog>\n      ")
-        });
-    }
-    dialogs.wizard = wizard;
-    function confirm(title, content, mdDialog) {
-        if (mdDialog) {
-            mdDialog($mdDialog());
-        }
-        return dialogs.dialog({
-            id: 'confirmDialog',
-            title: title,
-            okButton: true,
-            cancelButton: true,
-            locals: {
-                content: content
-            },
-            template: "\n        <!--<md-input-container flex>-->\n        <p ng-bind-html=\"vm.content\"></p>\n        <!--</md-input-container>-->\n      "
-        });
-    }
-    dialogs.confirm = confirm;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function download($event, account) {
-        var $q = heat.$inject.get('$q');
-        var heatApi = heat.$inject.get('heat');
-        var $timeout = heat.$inject.get('$timeout');
-        var $rootScope = heat.$inject.get('$rootScope');
-        var settings = heat.$inject.get('settings');
-        var assetInfo = heat.$inject.get('assetInfo');
-        var format = settings.get(SettingsService.DATEFORMAT_DEFAULT);
-        var locals = {
-            transactions: {
-                total: 0,
-                array: [],
-                percent: 0,
-                done: false
-            },
-            trades: {
-                total: 0,
-                array: [],
-                percent: 0,
-                done: false
-            },
-            currencies: [],
-            symbols: {}
-        };
-        heatApi.api.getTransactionsForAccountCount(account).then(function (count) {
-            var scopes = [];
-            for (var i = 0; i < count; i += 100) {
-                scopes.push([i, i + 99]);
-            }
-            $rootScope.$evalAsync(function () {
-                locals.transactions.total = count;
-            });
-            recursiveGetTransactions(account, scopes, function (transaction) {
-                $rootScope.$evalAsync(function () {
-                    if (transaction == null) {
-                        locals.transactions.percent = 100;
-                        locals.transactions.done = true;
-                        done();
-                    }
-                    else {
-                        locals.transactions.array.push(transaction);
-                        locals.transactions.percent = Math.round(locals.transactions.array.length / (locals.transactions.total / 100));
-                    }
-                });
-            });
-        });
-        heatApi.api.getAllAccountTradesCount(account).then(function (count) {
-            var scopes = [];
-            for (var i = 0; i < count; i += 100) {
-                scopes.push([i, i + 99]);
-            }
-            $rootScope.$evalAsync(function () {
-                locals.trades.total = count;
-            });
-            recursiveGetTrades(account, scopes, function (trade) {
-                $rootScope.$evalAsync(function () {
-                    if (trade == null) {
-                        locals.trades.percent = 100;
-                        locals.trades.done = true;
-                        done();
-                    }
-                    else {
-                        locals.trades.array.push(trade);
-                        locals.trades.percent = Math.round(locals.trades.array.length / (locals.trades.total / 100));
-                    }
-                });
-            });
-        });
-        function done() {
-            if (locals.transactions.done && locals.trades.done) {
-                console.log('duplicates', collectDuplicates(locals.transactions.array));
-                var assets_1 = collectAssets(locals.transactions.array, locals.trades.array);
-                getAssetSymbols(assets_1).then(function (symbols) {
-                    $rootScope.$evalAsync(function () {
-                        assets_1.forEach(function (asset) {
-                            var symbol = symbols[asset].symbol;
-                            locals.currencies.push({
-                                id: asset,
-                                symbol: symbol,
-                                download: createDownloadFunction(asset, symbol)
-                            });
-                            locals.symbols[asset] = symbol;
-                        });
-                    });
-                });
-            }
-        }
-        function createDownloadFunction(currency, symbol) {
-            return function () {
-                var entries = [];
-                locals.transactions.array.forEach(function (t) {
-                    if (filterTransaction(currency, t))
-                        entries.push(transactionToHistory(currency, t));
-                });
-                locals.trades.array.forEach(function (t) {
-                    if (filterTrade(currency, t))
-                        entries.push(tradeToHistory(currency, t));
-                });
-                entries.sort(function (a, b) { return a.timestamp - b.timestamp; });
-                var csv = historyToCSV(entries);
-                download(csv, account + '.' + symbol + '.csv');
-            };
-        }
-        function collectAssets(transactions, trades) {
-            var assets = { "0": 1 };
-            transactions.forEach(function (transaction) {
-                var type = transaction.type, subType = transaction.subtype;
-                if (type == 2 && subType == 4 || type == 2 && subType == 3) {
-                    assets[transaction.attachment.asset] = 1;
-                    assets[transaction.attachment.currency] = 1;
-                }
-                if (type == 2 && subType == 2) {
-                    assets[transaction.attachment.asset] = 1;
-                }
-            });
-            trades.forEach(function (trade) {
-                assets[trade.asset] = 1;
-                assets[trade.currency] = 1;
-            });
-            return Object.getOwnPropertyNames(assets);
-        }
-        function collectDuplicates(transactions) {
-            var dups = {};
-            transactions.forEach(function (transaction) {
-                if (typeof dups[transaction.transaction] == "number") {
-                    dups[transaction.transaction]++;
-                }
-                else {
-                    dups[transaction.transaction] = 1;
-                }
-            });
-            var collect = {};
-            Object.getOwnPropertyNames(dups).forEach(function (name) {
-                if (dups[name] > 1) {
-                    collect[name] = dups[name];
-                }
-            });
-            return collect;
-        }
-        function getAssetSymbols(assets) {
-            var promises = [];
-            var data = {};
-            assets.forEach(function (asset) {
-                promises.push(assetInfo.getInfo(asset).then(function (info) {
-                    data[asset] = info;
-                }));
-            });
-            return Promise.all(promises).then(function () { return data; });
-        }
-        function filterTransaction($currency, transaction) {
-            if ($currency == "0")
-                return true;
-            var type = transaction.type, subType = transaction.subtype;
-            if (type == 2 && subType == 4 || type == 2 && subType == 3) {
-                return transaction.attachment.asset == $currency || transaction.attachment.currency == $currency;
-            }
-            if (type == 2 && subType == 2) {
-                return transaction.attachment.asset == $currency;
-            }
-        }
-        function filterTrade($currency, trade) {
-            return trade.currency == $currency || trade.asset == $currency;
-        }
-        function recursiveGetTransactions(account, scopes, reporter) {
-            var scope = scopes.shift();
-            if (!scope) {
-                reporter(null);
-                return;
-            }
-            var deferred = $q.defer();
-            heatApi.api.getTransactionsForAccount(account, scope[0], scope[1]).then(function (transactions) {
-                transactions.forEach(function (transaction) {
-                    reporter(transaction);
-                });
-                $timeout(function () {
-                    recursiveGetTransactions(account, scopes, reporter);
-                });
-            }).catch(deferred.reject);
-            return deferred.promise;
-        }
-        function recursiveGetTrades(account, scopes, reporter) {
-            var scope = scopes.shift();
-            if (!scope) {
-                reporter(null);
-                return;
-            }
-            var deferred = $q.defer();
-            heatApi.api.getAllAccountTrades(account, "0", 0, scope[0], scope[1]).then(function (trades) {
-                trades.forEach(function (trade) {
-                    reporter(trade);
-                });
-                $timeout(function () {
-                    recursiveGetTrades(account, scopes, reporter);
-                });
-            }).catch(deferred.reject);
-            return deferred.promise;
-        }
-        function transactionToHistory($currency, transaction) {
-            var entry = {}, type = transaction.type, subType = transaction.subtype;
-            entry.timestamp = transaction.timestamp;
-            entry.ID = transaction.transaction;
-            entry.TIME = dateFormat(utils.timestampToDate(transaction.timestamp), format);
-            entry.TYPE = encodeTxType(type, subType);
-            if (transaction.sender == account)
-                entry.FEE = utils.formatQNT(transaction.fee, 8);
-            else
-                entry.FEE = "0";
-            entry.MESSAGE = heatApi.getHeatMessageContents(transaction);
-            entry.ACCOUNT = transaction.sender == account ? transaction.recipient : transaction.sender;
-            entry.AMOUNT = '0';
-            entry.ASSET = '';
-            entry.PRICE = '';
-            entry.TOTAL = '';
-            if (type == 2 && subType == 4) {
-                var total = utils.calculateTotalOrderPriceQNT(transaction.attachment.quantity, transaction.attachment.price);
-                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
-                entry.TOTAL = utils.formatQNT(total, 8);
-                entry.ASSET = transaction.attachment.asset == $currency ? transaction.attachment.asset : transaction.attachment.currency;
-                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
-            }
-            else if (type == 2 && subType == 3) {
-                var total = utils.calculateTotalOrderPriceQNT(transaction.attachment.quantity, transaction.attachment.price);
-                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
-                entry.TOTAL = utils.formatQNT(total, 8);
-                entry.ASSET = transaction.attachment.asset == $currency ? transaction.attachment.asset : transaction.attachment.currency;
-                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
-            }
-            else if (type == 1 && subType == 0) {
-            }
-            else if (type == 0 && subType == 0) {
-                entry.ASSET = "0";
-                entry.ASSET_SYMBOL = "HEAT";
-                if (transaction.sender == transaction.recipient)
-                    entry.AMOUNT = "0";
-                else if (transaction.recipient == account)
-                    entry.AMOUNT = utils.formatQNT(transaction.amount, 8);
-                else
-                    entry.AMOUNT = "-" + utils.formatQNT(transaction.amount, 8);
-            }
-            else if (type == 2 && subType == 2) {
-                entry.ASSET = transaction.attachment.asset;
-                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
-                if (transaction.sender == transaction.recipient)
-                    entry.AMOUNT = "0";
-                else if (transaction.recipient == account)
-                    entry.AMOUNT = utils.formatQNT(transaction.attachment.quantity, 8);
-                else
-                    entry.AMOUNT = "-" + utils.formatQNT(transaction.attachment.quantity, 8);
-            }
-            else if (type == 2 && subType == 6) {
-                var quantity = transaction.attachment.cancelledOrderQuantity || "0";
-                var price = transaction.attachment.cancelledOrderPrice || "0";
-                var total = quantity != "0" && price != "0" ? utils.calculateTotalOrderPriceQNT(quantity, price) : "0";
-                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
-                entry.TOTAL = utils.formatQNT(total, 8);
-                entry.ASSET = transaction.attachment.cancelledOrderAsset ? (transaction.attachment.cancelledOrderAsset == $currency ? transaction.attachment.asset : transaction.attachment.currency) : '';
-                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
-            }
-            else if (type == 2 && subType == 5) {
-                var quantity = transaction.attachment.cancelledOrderQuantity || "0";
-                var price = transaction.attachment.cancelledOrderPrice || "0";
-                var total = quantity != "0" && price != "0" ? utils.calculateTotalOrderPriceQNT(quantity, price) : "0";
-                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
-                entry.TOTAL = utils.formatQNT(total, 8);
-                entry.ASSET = transaction.attachment.cancelledOrderAsset ? (transaction.attachment.cancelledOrderAsset == $currency ? transaction.attachment.asset : transaction.attachment.currency) : '';
-                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
-            }
-            else if (type == 4 && subType == 0) {
-            }
-            else if (type == 2 && subType == 0) {
-                if (transaction.transaction == $currency) {
-                    entry.AMOUNT = utils.formatQNT(transaction.attachment.quantity, 8);
-                }
-            }
-            return entry;
-        }
-        function tradeToHistory($currency, trade) {
-            var entry = {};
-            entry.timestamp = trade.timestamp;
-            entry.ID = trade.askOrder + "." + trade.bidOrder;
-            entry.TYPE = 'Trade';
-            entry.TIME = dateFormat(utils.timestampToDate(trade.timestamp), format);
-            entry.ACCOUNT = trade.seller == account ? trade.buyer : trade.seller;
-            entry.FEE = "0";
-            entry.MESSAGE = '';
-            entry.PRICE = '';
-            entry.TOTAL = '';
-            entry.ASSET = $currency;
-            entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
-            if (trade.seller == account && trade.buyer == account) {
-                entry.AMOUNT = '0';
-            }
-            else {
-                var total = utils.calculateTotalOrderPriceQNT(trade.quantity, trade.price);
-                entry.PRICE = utils.formatQNT(trade.price, 8);
-                entry.TOTAL = utils.formatQNT(total, 8);
-                if (trade.currency == $currency) {
-                    if (trade.buyer == account) {
-                        entry.AMOUNT = '-' + utils.formatQNT(total, 8);
-                    }
-                    else {
-                        entry.AMOUNT = utils.formatQNT(total, 8);
-                    }
-                }
-                else {
-                    if (trade.buyer == account) {
-                        entry.AMOUNT = utils.formatQNT(trade.quantity, 8);
-                    }
-                    else {
-                        entry.AMOUNT = '-' + utils.formatQNT(trade.quantity, 8);
-                    }
-                }
-            }
-            return entry;
-        }
-        function getSymbol(id) {
-            return id;
-        }
-        function encodeTxType(type, subType) {
-            if (type == 2 && subType == 4)
-                return 'Buy order';
-            if (type == 2 && subType == 3)
-                return 'Sell order';
-            if (type == 1 && subType == 0)
-                return 'Message';
-            if (type == 0 && subType == 0)
-                return 'Transfer';
-            if (type == 2 && subType == 2)
-                return 'Transfer';
-            if (type == 2 && subType == 6)
-                return 'Cancel buy';
-            if (type == 2 && subType == 5)
-                return 'Cancel sell';
-            if (type == 4 && subType == 0)
-                return 'Balance lease';
-            if (type == 2 && subType == 0)
-                return 'Asset Issuance';
-            return 'Other';
-        }
-        function removeCommas(str) {
-            return str ? str.replace(/,/g, '') : '';
-        }
-        function historyToCSV(entries) {
-            var buffer = [];
-            buffer.push("ID,TIME,TYPE,ACCOUNT,ASSET,ASSET_SYMBOL,AMOUNT,PRICE,TOTAL,FEE,MESSAGE");
-            entries.reverse();
-            entries.forEach(function (history) {
-                buffer.push([
-                    JSON.stringify(history.ID),
-                    history.TIME,
-                    history.TYPE,
-                    history.ACCOUNT,
-                    history.ASSET,
-                    history.ASSET_SYMBOL,
-                    history.AMOUNT,
-                    history.PRICE,
-                    history.TOTAL,
-                    history.FEE,
-                    JSON.stringify(history.MESSAGE)
-                ].map(function (x) { return removeCommas(x); }).join(','));
-            });
-            return buffer.join('\n');
-        }
-        function download(content, fileName) {
-            var blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-            saveAs(blob, fileName);
-        }
-        return dialogs.dialog({
-            id: 'download',
-            title: 'Download account history (CSV)',
-            targetEvent: $event,
-            okButton: false,
-            cancelButton: true,
-            locals: locals,
-            style: "\n        .dialog-download md-progress-linear {\n          margin-top: 8px !important;\n          margin-bottom: 8px !important;\n        }\n        .dialog-download .md-button {\n          text-align: left !important;\n          margin-left: 0px !important;\n          padding-left: 0px !important;\n        }\n      ",
-            template: "\n        <div layout=\"column\" class=\"dialog-download\">\n          <div layout=\"row\">Transactions ({{vm.transactions.array.length}})</div>\n          <md-progress-linear md-mode=\"determinate\" ng-value=\"vm.transactions.percent\"></md-progress-linear>\n          <div layout=\"row\">Trades ({{vm.trades.array.length}})</div>\n          <md-progress-linear md-mode=\"determinate\" ng-value=\"vm.trades.percent\"></md-progress-linear>\n          <!--<div>\n            <p>Total Transactions: {{vm.transactions.total}}</p>\n            <p>Count Transactions: {{vm.transactions.array.length}}</p>\n            <p>Percent: {{vm.transactions.percent}}</p>\n            <p>Total Trades: {{vm.trades.total}}</p>\n            <p>Count Trades: {{vm.trades.array.length}}</p>\n            <p>Percent: {{vm.trades.percent}}</p>\n          </div>-->\n          <div>\n            <div ng-repeat=\"currency in vm.currencies\">\n              <md-button ng-click=\"currency.download()\">Download {{currency.symbol}}.csv</md-button> View\n            </div>\n          </div>\n        </div>\n      "
-        });
-    }
-    dialogs.download = download;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function etherTransactionReceipt(status, message) {
-        return dialogs.dialog({
-            id: 'EtherTransactionReceipt',
-            title: "Transaction Receipt",
-            cancelButton: false,
-            okButton: true,
-            locals: {
-                status: status,
-                message: message
-            },
-            template: "\n        <h2>{{vm.status}}</h2><br>\n        <label ng-if=\"vm.status==='Success'\">Transaction hash is: {{vm.message}}</label>\n        <label ng-if=\"vm.status==='Error'\">{{vm.message}}</label>\n      "
-        });
-    }
-    dialogs.etherTransactionReceipt = etherTransactionReceipt;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function jsonDetails($event, jsonObject, title, fields, detailedObject, jsonText) {
-        return dialogs.dialog({
-            id: 'jsonDetails',
-            title: title,
-            targetEvent: $event,
-            cancelButton: false,
-            locals: {
-                jsonObject: jsonObject,
-                detailedObject: detailedObject || jsonObject,
-                viewNum: (fields === null || fields === void 0 ? void 0 : fields.length) > 0 ? 0 : 1,
-                fields: fields,
-                jsonText: jsonText,
-                toggle: function (num) {
-                    this.viewNum = num;
-                }
-            },
-            style: "\n         .details td {\n            padding: 8px;\n         }\n         .value {\n            opacity: 0.6;\n         }\n         .switcher-col {\n           margin-left: -40px;\n           margin-right: -20px;\n         }\n         .switcher {\n            opacity: 40%;\n            transform: rotate(-90deg);\n            font-size: smaller !important;    \n            width: 100px;\n            height: 93px;\n            min-width: 32px;\n            padding: 0;\n            margin: 0;\n         }\n         .on {\n            opacity: 100%;\n         }\n        ",
-            template: "\n        <div layout=\"row\" flex>\n        \n          <div ng-if=\"vm.fields || vm.json\" layout=\"column\" class=\"switcher-col\">\n            <md-button ng-if=\"vm.fields\" ng-class=\"{'on': vm.viewNum == 0}\" ng-click=\"vm.toggle(0)\" class=\"switcher\">\n                Table view\n            </md-button>\n            <md-button ng-class=\"{'on': vm.viewNum == 1}\" ng-click=\"vm.toggle(1)\" class=\"switcher\">\n                JSON formatted\n            </md-button>\n            <md-button ng-if=\"vm.jsonText\" ng-class=\"{'on': vm.viewNum == 2}\" ng-click=\"vm.toggle(2)\" class=\"switcher\">\n                JSON text\n            </md-button>\n          </div>\n          \n          <div ng-if=\"vm.viewNum == 0\">\n            <table class=\"details\">\n                <tr ng-repeat=\"item in vm.fields\" class=\"row\">\n                    <td>{{item[1] || item[0]}}</td><td class=\"value\" ng-bind-html=\"vm.detailedObject[item[0]]\"></td>\n                </tr>\n            </table>\n          </div>\n          \n          <div layout=\"column\" flex ng-if=\"vm.viewNum == 1\">\n            <json-formatter json=\"vm.jsonObject\" open=\"1\" class=\"json-formatter-dark\"></json-formatter>\n          </div>\n          \n          <div layout=\"column\" flex ng-if=\"vm.viewNum == 2\">\n            <textarea readonly style=\"height: 100%\">{{vm.jsonObject | json}}</textarea>\n          </div>\n        </div>\n      "
-        });
-    }
-    dialogs.jsonDetails = jsonDetails;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function prompt($event, title, description, defaultValue) {
-        var $q = heat.$inject.get('$q');
-        var deferred = $q.defer();
-        var locals = {
-            v: {
-                value: defaultValue || ''
-            },
-            description: description || '',
-        };
-        dialogs.dialog({
-            id: 'prompt',
-            title: title,
-            targetEvent: $event,
-            template: "\n        <p>{{vm.description}}</p>\n        <md-input-container flex>\n          <input id=\"pwd\" type=\"password\" ng-model=\"vm.v.value\" autocomplete=\"off\" aria-label=\"Password\" auto-focus/><br>\n        </md-input-container>\n      ",
-            locals: locals
-        }).then(function () {
-            deferred.resolve(locals.v.value);
-        }, deferred.reject);
-        return deferred.promise;
-    }
-    dialogs.prompt = prompt;
-    function simplePrompt($event, title, description, fields) {
-        var $q = heat.$inject.get('$q');
-        var deferred = $q.defer();
-        var locals = {
-            description: description,
-            fields: fields
-        };
-        dialogs.dialog({
-            id: 'prompt',
-            title: title,
-            targetEvent: $event,
-            template: "\n        <p>{{vm.description}}</p>\n        <md-list>\n          <md-list-item class=\"md-2-line\" ng-repeat=\"item in vm.fields\">\n            <md-input-container flex>\n              <label>{{item.label}}</label>\n              <!--<input id=\"1\" type=\"text\" ng-model=\"item.value\" autocomplete=\"off\" auto-focus/>-->\n              <input type=\"text\" ng-model=\"item.value\" autocomplete=\"off\"/>\n            </md-input-container>\n          </md-list-item>\n        </md-list>\n      ",
-            locals: locals
-        }).then(function () {
-            deferred.resolve(locals.fields.map(function (v) { return v.value; }));
-        }, deferred.reject);
-        return deferred.promise;
-    }
-    dialogs.simplePrompt = simplePrompt;
-    function alert($event, title, description) {
-        var $q = heat.$inject.get('$q');
-        var deferred = $q.defer();
-        var locals = {
-            description: description || '',
-        };
-        dialogs.dialog({
-            id: 'alert',
-            title: title,
-            targetEvent: $event,
-            template: "\n        <p>{{vm.description}}</p>\n      ",
-            locals: locals
-        }).then(function () {
-            deferred.resolve();
-        }, deferred.reject);
-        return deferred.promise;
-    }
-    dialogs.alert = alert;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function showProgressMessage($event, message) {
-        dialogs.dialog({
-            id: 'shutdown',
-            title: message,
-            targetEvent: $event,
-            okButton: false,
-            template: "\n        <div layout=\"row\" layout-padding layout-align=center center\" flex>\n          <md-progress-circular md-mode=\"indeterminate\"></md-progress-circular>\n        </div>\n      "
-        });
-    }
-    dialogs.showProgressMessage = showProgressMessage;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function textEditor(title, content, saveContentFunc, copyToClipboardFunc) {
-        dialogs.dialog({
-            id: 'textEditor',
-            title: title,
-            okButton: false,
-            cancelButton: false,
-            locals: {
-                copyToClipboard: copyToClipboardFunc
-                    ? function () {
-                        copyToClipboardFunc(this.content);
-                    }
-                    : null,
-                save: function () {
-                    saveContentFunc(this.content);
-                    dialogs.$mdDialog().hide();
-                },
-                close: function () {
-                    dialogs.$mdDialog().hide();
-                },
-                content: content
-            },
-            template: "\n        <!--<md-input-container flex>-->\n        <p>\n          <textarea rows=\"20\" ng-model=\"vm.content\" id=\"content-textarea\"></textarea>\n        </p>\n        <!--</md-input-container>-->\n        <div layout=\"row\" layout-align=\"center center\" style=\"min-height: 25px\">\n          <md-button class=\"md-primary\" ng-if=\"vm.copyToClipboard\" ng-click=\"vm.copyToClipboard()\">Copy</md-button>\n          <md-button class=\"md-primary\" ng-click=\"vm.save()\">Save</md-button>\n          <md-button class=\"md-primary\" ng-click=\"vm.close()\">Close</md-button>\n        </div>\n      ",
-            style: "\n        #content-textarea {\n            width: 100%;\n        }\n      "
-        });
-    }
-    dialogs.textEditor = textEditor;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function transactionDetails($event, transaction) {
-        var settings = heat.$inject.get('settings');
-        dialogs.dialog({
-            id: 'transactionDetails',
-            title: 'Transaction details',
-            targetEvent: $event,
-            cancelButton: false,
-            locals: {
-                date: dateFormat(utils.timestampToDate(transaction.timestamp), settings.get(SettingsService.DATEFORMAT_DEFAULT)),
-                amount: utils.commaFormat(utils.convertToQNTf(transaction.amount.toString())) + ' HEAT',
-                source: transaction.sender,
-                destination: transaction.recipient,
-                transactionId: transaction.transaction,
-                confirmed: transaction.confirmations ? 'YES' : 'NO'
-            },
-            style: "\n        .dialog-transaction-details td {\n          padding: 8px;\n        }\n      ",
-            template: "\n        <div layout=\"column\" class=\"dialog-transaction-details\">\n          <table>\n            <tr><td>Time</td><td>{{vm.date}}</td></tr>\n            <tr><td>Amount</td><td>{{vm.amount}}</td></tr>\n            <tr><td>Source</td><td>{{vm.source}}</td></tr>\n            <tr><td>Destination</td><td>{{vm.destination}}</td></tr>\n            <tr><td>Transaction ID</td><td>{{vm.transactionId}}</td></tr>\n            <tr><td>Confirmed</td><td>{{vm.confirmed}}</td></tr>\n          </table>\n        </div>\n      "
-        });
-    }
-    dialogs.transactionDetails = transactionDetails;
-})(dialogs || (dialogs = {}));
-var dialogs;
-(function (dialogs) {
-    function withdraw(_to, _amount) {
-        var lightwalletService = heat.$inject.get('lightwalletService');
-        var user = heat.$inject.get('user');
-        lightwalletService.sendEther(user.currency.address, _to, _amount);
-        dialogs.$mdDialog().hide();
-    }
-    function withdrawEther($event) {
-        return dialogs.dialog({
-            id: 'withdrawEtherWallet',
-            title: "Send Ether",
-            targetEvent: $event,
-            cancelButton: true,
-            okButton: false,
-            locals: {
-                withdraw: withdraw,
-                recipient: undefined,
-                amount: undefined
-            },
-            style: "\n      .fee-button {\n        max-width:140px !important;\n      }\n    ",
-            template: "\n        <md-input-container flex>\n          <input ng-model=\"vm.recipient\" name=\"recipient\" placeholder=\"Recipient address\" autocomplete=\"off\" required />\n        </md-input-container>\n        <md-input-container flex>\n          <input ng-model=\"vm.amount\" name=\"amount\" placeholder = \"Amount (in Wei)\" autocomplete=\"off\" required />\n        </md-input-container>\n        <md-button ng-click=\"0\" ng-disabled=\"true\" class=\"fee fee-button\">Fee: 0.000420 ETH</md-button>\n        <div layout=\"row\" layout-align=\"center center\" style=\"min-height: 25px\">\n          <md-button class=\"md-primary\" ng-disabled=\"!vm.amount || !vm.recipient\" ng-href=\"#/ethwallet\" ng-click=\"vm.withdraw(vm.recipient, vm.amount)\">Send</md-button>\n        </div>\n      "
-        });
-    }
-    dialogs.withdrawEther = withdrawEther;
-})(dialogs || (dialogs = {}));
 var AbstractBatchViewerComponent = (function () {
     function AbstractBatchViewerComponent($scope, $q, $timeout) {
         this.$scope = $scope;
@@ -5125,6 +4248,1210 @@ var TransactionRenderer = (function () {
     };
     return TransactionRenderer;
 }());
+var converters;
+(function (converters) {
+    var charToNibble = {};
+    var nibbleToChar = [];
+    var i;
+    for (i = 0; i <= 9; ++i) {
+        var character = i.toString();
+        charToNibble[character] = i;
+        nibbleToChar.push(character);
+    }
+    for (i = 10; i <= 15; ++i) {
+        var lowerChar = String.fromCharCode('a'.charCodeAt(0) + i - 10);
+        var upperChar = String.fromCharCode('A'.charCodeAt(0) + i - 10);
+        charToNibble[lowerChar] = i;
+        charToNibble[upperChar] = i;
+        nibbleToChar.push(lowerChar);
+    }
+    function byteArrayToHexString(bytes) {
+        var str = '';
+        for (var i = 0; i < bytes.length; ++i) {
+            if (bytes[i] < 0) {
+                bytes[i] += 256;
+            }
+            str += nibbleToChar[bytes[i] >> 4] + nibbleToChar[bytes[i] & 0x0F];
+        }
+        return str;
+    }
+    converters.byteArrayToHexString = byteArrayToHexString;
+    function stringToByteArray(stringValue) {
+        var str = unescape(encodeURIComponent(stringValue));
+        var bytes = new Array(str.length);
+        for (var i = 0; i < str.length; ++i) {
+            bytes[i] = str.charCodeAt(i);
+        }
+        return bytes;
+    }
+    converters.stringToByteArray = stringToByteArray;
+    function hexStringToByteArray(str) {
+        var bytes = [];
+        var i = 0;
+        if (0 !== str.length % 2) {
+            bytes.push(charToNibble[str.charAt(0)]);
+            ++i;
+        }
+        for (; i < str.length - 1; i += 2) {
+            bytes.push((charToNibble[str.charAt(i)] << 4) + charToNibble[str.charAt(i + 1)]);
+        }
+        return bytes;
+    }
+    converters.hexStringToByteArray = hexStringToByteArray;
+    function stringToHexString(str) {
+        return byteArrayToHexString(stringToByteArray(str));
+    }
+    converters.stringToHexString = stringToHexString;
+    function hexStringToString(hex) {
+        return byteArrayToString(hexStringToByteArray(hex));
+    }
+    converters.hexStringToString = hexStringToString;
+    function checkBytesToIntInput(bytes, numBytes, opt_startIndex) {
+        var startIndex = opt_startIndex || 0;
+        if (startIndex < 0) {
+            throw new Error('Start index should not be negative');
+        }
+        if (bytes.length < startIndex + numBytes) {
+            throw new Error('Need at least ' + (numBytes) + ' bytes to convert to an integer');
+        }
+        return startIndex;
+    }
+    function byteArrayToSignedShort(bytes, opt_startIndex) {
+        var index = checkBytesToIntInput(bytes, 2, opt_startIndex);
+        var value = bytes[index];
+        value += bytes[index + 1] << 8;
+        return value;
+    }
+    converters.byteArrayToSignedShort = byteArrayToSignedShort;
+    function byteArrayToSignedInt32(bytes, opt_startIndex) {
+        var index = checkBytesToIntInput(bytes, 4, opt_startIndex);
+        var value = bytes[index];
+        value += bytes[index + 1] << 8;
+        value += bytes[index + 2] << 16;
+        value += bytes[index + 3] << 24;
+        return value;
+    }
+    converters.byteArrayToSignedInt32 = byteArrayToSignedInt32;
+    function byteArrayToBigInteger(bytes, opt_startIndex) {
+        var index = checkBytesToIntInput(bytes, 8, opt_startIndex);
+        var value = new BigInteger("0", 10);
+        var temp1, temp2;
+        for (var i = 7; i >= 0; i--) {
+            temp1 = value.multiply(new BigInteger("256", 10));
+            temp2 = temp1.add(new BigInteger(bytes[opt_startIndex + i].toString(10), 10));
+            value = temp2;
+        }
+        return value;
+    }
+    converters.byteArrayToBigInteger = byteArrayToBigInteger;
+    function byteArrayToWordArray(byteArray) {
+        var i = 0, offset = 0, word = 0, len = byteArray.length;
+        var words = new Uint32Array(((len / 4) | 0) + (len % 4 == 0 ? 0 : 1));
+        while (i < (len - (len % 4))) {
+            words[offset++] = (byteArray[i++] << 24) | (byteArray[i++] << 16) | (byteArray[i++] << 8) | (byteArray[i++]);
+        }
+        if (len % 4 != 0) {
+            word = byteArray[i++] << 24;
+            if (len % 4 > 1) {
+                word = word | byteArray[i++] << 16;
+            }
+            if (len % 4 > 2) {
+                word = word | byteArray[i++] << 8;
+            }
+            words[offset] = word;
+        }
+        return { sigBytes: len, words: words };
+    }
+    converters.byteArrayToWordArray = byteArrayToWordArray;
+    function wordArrayToByteArray(wordArray) {
+        var len = wordArray.words.length;
+        if (len == 0) {
+            return new Array(0);
+        }
+        var byteArray = new Array(wordArray.sigBytes);
+        var offset = 0, word, i;
+        for (i = 0; i < len - 1; i++) {
+            word = wordArray.words[i];
+            byteArray[offset++] = word >> 24;
+            byteArray[offset++] = (word >> 16) & 0xff;
+            byteArray[offset++] = (word >> 8) & 0xff;
+            byteArray[offset++] = word & 0xff;
+        }
+        word = wordArray.words[len - 1];
+        byteArray[offset++] = word >> 24;
+        if (wordArray.sigBytes % 4 == 0) {
+            byteArray[offset++] = (word >> 16) & 0xff;
+            byteArray[offset++] = (word >> 8) & 0xff;
+            byteArray[offset++] = word & 0xff;
+        }
+        if (wordArray.sigBytes % 4 > 1) {
+            byteArray[offset++] = (word >> 16) & 0xff;
+        }
+        if (wordArray.sigBytes % 4 > 2) {
+            byteArray[offset++] = (word >> 8) & 0xff;
+        }
+        return byteArray;
+    }
+    converters.wordArrayToByteArray = wordArrayToByteArray;
+    function byteArrayToString(bytes, opt_startIndex, length) {
+        if (length == 0) {
+            return "";
+        }
+        if (opt_startIndex && length) {
+            var index = checkBytesToIntInput(bytes, parseInt(length, 10), parseInt(opt_startIndex, 10));
+            bytes = bytes.slice(opt_startIndex, opt_startIndex + length);
+        }
+        return byteArrayToStringInternal(bytes);
+    }
+    converters.byteArrayToString = byteArrayToString;
+    function byteArrayToStringInternal(bytes) {
+        var result = "";
+        var chunkSize = 20000;
+        if (bytes.length > chunkSize) {
+            var pos = 0;
+            while (pos < bytes.length) {
+                var shift = 0;
+                while (shift < 3) {
+                    try {
+                        var escaped = escape(String.fromCharCode.apply(null, bytes.slice(pos, pos + chunkSize + shift)));
+                        result = result + decodeURIComponent(escaped);
+                        pos = pos + chunkSize + shift;
+                        break;
+                    }
+                    catch (e) {
+                        console.debug("trying decode escaped string " + e);
+                    }
+                    shift++;
+                }
+            }
+        }
+        else {
+            result = decodeURIComponent(escape(String.fromCharCode.apply(null, bytes)));
+        }
+        return result;
+    }
+    function byteArrayToShortArray(byteArray) {
+        var shortArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var i;
+        for (i = 0; i < 16; i++) {
+            shortArray[i] = byteArray[i * 2] | byteArray[i * 2 + 1] << 8;
+        }
+        return shortArray;
+    }
+    converters.byteArrayToShortArray = byteArrayToShortArray;
+    function shortArrayToByteArray(shortArray) {
+        var byteArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var i;
+        for (i = 0; i < 16; i++) {
+            byteArray[2 * i] = shortArray[i] & 0xff;
+            byteArray[2 * i + 1] = shortArray[i] >> 8;
+        }
+        return byteArray;
+    }
+    converters.shortArrayToByteArray = shortArrayToByteArray;
+    function shortArrayToHexString(ary) {
+        var res = [];
+        for (var i = 0; i < ary.length; i++) {
+            res.push(nibbleToChar[(ary[i] >> 4) & 0x0f], nibbleToChar[ary[i] & 0x0f], nibbleToChar[(ary[i] >> 12) & 0x0f], nibbleToChar[(ary[i] >> 8) & 0x0f]);
+        }
+        return res.join("");
+    }
+    converters.shortArrayToHexString = shortArrayToHexString;
+    function int32ToBytes(x, opt_bigEndian) {
+        return intToBytes_(x, 4, 4294967295, opt_bigEndian);
+    }
+    converters.int32ToBytes = int32ToBytes;
+    function intToBytes_(x, numBytes, unsignedMax, opt_bigEndian) {
+        var signedMax = Math.floor(unsignedMax / 2);
+        var negativeMax = (signedMax + 1) * -1;
+        if (x != Math.floor(x) || x < negativeMax || x > unsignedMax) {
+            throw new Error(x + ' is not a ' + (numBytes * 8) + ' bit integer');
+        }
+        var bytes = [];
+        var current;
+        var numberType = x >= 0 && x <= signedMax ? 0 :
+            x > signedMax && x <= unsignedMax ? 1 : 2;
+        if (numberType == 2) {
+            x = (x * -1) - 1;
+        }
+        for (var i = 0; i < numBytes; i++) {
+            if (numberType == 2) {
+                current = 255 - (x % 256);
+            }
+            else {
+                current = x % 256;
+            }
+            if (opt_bigEndian) {
+                bytes.unshift(current);
+            }
+            else {
+                bytes.push(current);
+            }
+            if (numberType == 1) {
+                x = Math.floor(x / 256);
+            }
+            else {
+                x = x >> 8;
+            }
+        }
+        return bytes;
+    }
+    function arrayBufferToString(buf) {
+        return new TextDecoder().decode(buf);
+    }
+    converters.arrayBufferToString = arrayBufferToString;
+    function stringToArrayBuffer(str) {
+        return new TextEncoder().encode(str);
+    }
+    converters.stringToArrayBuffer = stringToArrayBuffer;
+    function concatenate(buffer1, buffer2) {
+        var temp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
+        temp.set(new Uint8Array(buffer1), 0);
+        temp.set(new Uint8Array(buffer2), buffer1.byteLength);
+        return temp.buffer;
+    }
+    converters.concatenate = concatenate;
+})(converters || (converters = {}));
+var heat;
+(function (heat) {
+    var crypto;
+    (function (crypto_1) {
+        var _hash = {
+            init: SHA256_init,
+            update: SHA256_write,
+            getBytes: SHA256_finalize
+        };
+        crypto_1.SHA256 = _hash;
+        function simpleHash(message) {
+            _hash.init();
+            _hash.update(message);
+            return _hash.getBytes();
+        }
+        function curve25519_clamp(curve) {
+            curve[0] &= 0xFFF8;
+            curve[15] &= 0x7FFF;
+            curve[15] |= 0x4000;
+            return curve;
+        }
+        function calculateStringHash(inputString) {
+            var hexString = converters.stringToHexString(inputString);
+            var bytes = converters.hexStringToByteArray(hexString);
+            var hashBytes = simpleHash(bytes);
+            return converters.byteArrayToHexString(hashBytes);
+        }
+        crypto_1.calculateStringHash = calculateStringHash;
+        function byteArrayToBigInteger(byteArray, startIndex) {
+            var value = new BigInteger("0", 10);
+            var temp1, temp2;
+            for (var i = byteArray.length - 1; i >= 0; i--) {
+                temp1 = value.multiply(new BigInteger("256", 10));
+                temp2 = temp1.add(new BigInteger(byteArray[i].toString(10), 10));
+                value = temp2;
+            }
+            return value;
+        }
+        function calculateFullHash(unsignedTransaction, signature) {
+            var unsignedTransactionBytes = converters.hexStringToByteArray(unsignedTransaction);
+            var signatureBytes = converters.hexStringToByteArray(signature);
+            var signatureHash = simpleHash(signatureBytes);
+            _hash.init();
+            _hash.update(unsignedTransactionBytes);
+            _hash.update(signatureHash);
+            var fullHash = _hash.getBytes();
+            return converters.byteArrayToHexString(fullHash);
+        }
+        crypto_1.calculateFullHash = calculateFullHash;
+        function fullNameToHash(fullNameUTF8) {
+            _hash.init();
+            _hash.update(converters.stringToByteArray(fullNameUTF8));
+            var slice = (converters.hexStringToByteArray(converters.byteArrayToHexString(_hash.getBytes()))).slice(0, 8);
+            return byteArrayToBigInteger(slice).toString();
+        }
+        crypto_1.fullNameToHash = fullNameToHash;
+        function calculateTransactionId(fullHashHex) {
+            var slice = (converters.hexStringToByteArray(fullHashHex)).slice(0, 8);
+            var transactionId = byteArrayToBigInteger(slice).toString();
+            return transactionId;
+        }
+        crypto_1.calculateTransactionId = calculateTransactionId;
+        function secretPhraseToPublicKey(secretPhrase) {
+            var secretHex = converters.stringToHexString(secretPhrase);
+            var secretPhraseBytes = converters.hexStringToByteArray(secretHex);
+            var digest = simpleHash(secretPhraseBytes);
+            return converters.byteArrayToHexString(curve25519.keygen(digest).p);
+        }
+        crypto_1.secretPhraseToPublicKey = secretPhraseToPublicKey;
+        function hash(text) {
+            var textBytes = converters.hexStringToByteArray(converters.stringToHexString(text));
+            var digest = simpleHash(textBytes);
+            return converters.byteArrayToHexString(digest);
+        }
+        crypto_1.hash = hash;
+        function getPrivateKey(secretPhrase) {
+            SHA256_init();
+            SHA256_write(converters.stringToByteArray(secretPhrase));
+            return converters.shortArrayToHexString(curve25519_clamp(converters.byteArrayToShortArray(SHA256_finalize())));
+        }
+        crypto_1.getPrivateKey = getPrivateKey;
+        function getAccountId(secretPhrase) {
+            var publicKey = this.secretPhraseToPublicKey(secretPhrase);
+            return this.getAccountIdFromPublicKey(publicKey);
+        }
+        crypto_1.getAccountId = getAccountId;
+        function getAccountIdFromPublicKey(publicKey) {
+            _hash.init();
+            _hash.update(converters.hexStringToByteArray(publicKey));
+            var account = _hash.getBytes();
+            var slice = (converters.hexStringToByteArray(converters.byteArrayToHexString(account))).slice(0, 8);
+            return byteArrayToBigInteger(slice).toString();
+        }
+        crypto_1.getAccountIdFromPublicKey = getAccountIdFromPublicKey;
+        function signBytes(message, secretPhrase) {
+            var messageBytes = converters.hexStringToByteArray(message);
+            var secretPhraseBytes = converters.hexStringToByteArray(secretPhrase);
+            var digest = simpleHash(secretPhraseBytes);
+            var s = curve25519.keygen(digest).s;
+            var m = simpleHash(messageBytes);
+            _hash.init();
+            _hash.update(m);
+            _hash.update(s);
+            var x = _hash.getBytes();
+            var y = curve25519.keygen(x).p;
+            _hash.init();
+            _hash.update(m);
+            _hash.update(y);
+            var h = _hash.getBytes();
+            var v = curve25519.sign(h, x, s);
+            return converters.byteArrayToHexString(v.concat(h));
+        }
+        crypto_1.signBytes = signBytes;
+        function verifyBytes(signature, message, publicKey) {
+            var signatureBytes = converters.hexStringToByteArray(signature);
+            var messageBytes = converters.hexStringToByteArray(message);
+            var publicKeyBytes = converters.hexStringToByteArray(publicKey);
+            var v = signatureBytes.slice(0, 32);
+            var h = signatureBytes.slice(32);
+            var y = curve25519.verify(v, h, publicKeyBytes);
+            var m = simpleHash(messageBytes);
+            _hash.init();
+            _hash.update(m);
+            _hash.update(y);
+            var h2 = _hash.getBytes();
+            return areByteArraysEqual(h, h2);
+        }
+        crypto_1.verifyBytes = verifyBytes;
+        function areByteArraysEqual(bytes1, bytes2) {
+            if (bytes1.length !== bytes2.length) {
+                return false;
+            }
+            for (var i = 0; i < bytes1.length; ++i) {
+                if (bytes1[i] !== bytes2[i])
+                    return false;
+            }
+            return true;
+        }
+        function encryptNote(message, options, secretPhrase, uncompressed) {
+            if (!options.sharedKey) {
+                if (!options.privateKey) {
+                    options.privateKey = converters.hexStringToByteArray(this.getPrivateKey(secretPhrase));
+                }
+                if (!options.publicKey) {
+                    throw new Error('Missing publicKey argument');
+                }
+            }
+            var encrypted = encryptData(converters.stringToByteArray(message), options, uncompressed);
+            return {
+                "message": converters.byteArrayToHexString(encrypted.data),
+                "nonce": converters.byteArrayToHexString(encrypted.nonce)
+            };
+        }
+        crypto_1.encryptNote = encryptNote;
+        function encryptBinaryNote(message, options, secretPhrase, uncompressed) {
+            if (!options.sharedKey) {
+                if (!options.privateKey) {
+                    options.privateKey = converters.hexStringToByteArray(this.getPrivateKey(secretPhrase));
+                }
+                if (!options.publicKey) {
+                    throw new Error('Missing publicKey argument');
+                }
+            }
+            var encrypted = encryptData(message, options, uncompressed);
+            return {
+                "message": converters.byteArrayToHexString(encrypted.data),
+                "nonce": converters.byteArrayToHexString(encrypted.nonce)
+            };
+        }
+        crypto_1.encryptBinaryNote = encryptBinaryNote;
+        function encryptBinary(buffer, options, uncompressed) {
+            var crypto = window.crypto || window['msCrypto'];
+            if (!crypto)
+                throw new Error("Browser not supported");
+            if (!options.sharedKey)
+                options.sharedKey = getSharedKey(options.privateKey, options.publicKey);
+            options.nonce = new Uint8Array(32);
+            crypto.getRandomValues(options.nonce);
+            var compressedData = uncompressed ? new Uint8Array(buffer) : pako.gzip(new Uint8Array(buffer));
+            var data = aesEncrypt(compressedData, options);
+            return {
+                isText: false,
+                data: converters.byteArrayToHexString(data),
+                nonce: converters.byteArrayToHexString(options.nonce)
+            };
+        }
+        crypto_1.encryptBinary = encryptBinary;
+        function getSharedKey(key1, key2) {
+            return converters.shortArrayToByteArray(curve25519_(converters.byteArrayToShortArray(key1), converters.byteArrayToShortArray(key2), null));
+        }
+        crypto_1.getSharedKey = getSharedKey;
+        function encryptData(plaintext, options, uncompressed) {
+            var crypto = window.crypto || window['msCrypto'];
+            if (!crypto) {
+                throw new Error("Browser not supported");
+            }
+            if (!options.sharedKey) {
+                options.sharedKey = getSharedKey(options.privateKey, options.publicKey);
+            }
+            options.nonce = new Uint8Array(32);
+            crypto.getRandomValues(options.nonce);
+            var compressedPlaintext = uncompressed ? new Uint8Array(plaintext) : pako.gzip(new Uint8Array(plaintext));
+            var data = aesEncrypt(compressedPlaintext, options);
+            return {
+                "nonce": options.nonce,
+                "data": data
+            };
+        }
+        function aesEncrypt(plaintext, options) {
+            var crypto = window.crypto || window['msCrypto'];
+            var text = converters.byteArrayToWordArray(plaintext);
+            var sharedKey = options.sharedKey ? options.sharedKey.slice(0) :
+                getSharedKey(options.privateKey, options.publicKey);
+            for (var i = 0; i < 32; i++) {
+                sharedKey[i] ^= options.nonce[i];
+            }
+            var tmp = new Uint8Array(16);
+            crypto.getRandomValues(tmp);
+            var key = CryptoJS.SHA256(converters.byteArrayToWordArray(sharedKey));
+            var iv = converters.byteArrayToWordArray(tmp);
+            var encrypted = CryptoJS.AES.encrypt(text, key, {
+                iv: iv
+            });
+            var ivOut = converters.wordArrayToByteArray(encrypted.iv);
+            var ciphertextOut = converters.wordArrayToByteArray(encrypted.ciphertext);
+            return ivOut.concat(ciphertextOut);
+        }
+        function encryptMessage(message, publicKey, secretPhrase, uncompressed) {
+            var options = {
+                "account": crypto.getAccountIdFromPublicKey(publicKey),
+                "publicKey": converters.hexStringToByteArray(publicKey)
+            };
+            var encrypted = heat.crypto.encryptNote(message, options, secretPhrase, uncompressed);
+            return {
+                isText: true,
+                data: encrypted.message,
+                nonce: encrypted.nonce
+            };
+        }
+        crypto_1.encryptMessage = encryptMessage;
+        function decryptMessage(data, nonce, publicKey, secretPhrase, uncompressed) {
+            return decrypt(decryptData, data, nonce, publicKey, secretPhrase, uncompressed);
+        }
+        crypto_1.decryptMessage = decryptMessage;
+        function decryptBinary(data, nonce, publicKey, secretPhrase, uncompressed) {
+            return decrypt(decryptBinaryData, data, nonce, publicKey, secretPhrase, uncompressed);
+        }
+        crypto_1.decryptBinary = decryptBinary;
+        function decrypt(decryptFunction, data, nonce, publicKey, secretPhrase, uncompressed) {
+            var privateKey = converters.hexStringToByteArray(getPrivateKey(secretPhrase));
+            var publicKeyBytes = converters.hexStringToByteArray(publicKey);
+            var sharedKey = getSharedKey(privateKey, publicKeyBytes);
+            var dataBytes = converters.hexStringToByteArray(data);
+            var options = {
+                privateKey: privateKey,
+                publicKey: publicKeyBytes,
+                nonce: converters.hexStringToByteArray(nonce),
+                sharedKey: sharedKey
+            };
+            try {
+                return decryptFunction(dataBytes, options, uncompressed);
+            }
+            catch (e) {
+                if (e instanceof RangeError || e == 'incorrect header check') {
+                    console.error('Managed Exception: ' + e);
+                    return decryptFunction(dataBytes, options, !uncompressed);
+                }
+                throw e;
+            }
+        }
+        function decryptData(data, options, uncompressed) {
+            var decrypted = aesDecrypt(data, options);
+            var binData = new Uint8Array(decrypted);
+            return converters.byteArrayToString(uncompressed ? binData : pako.inflate(binData));
+        }
+        function decryptBinaryData(data, options, uncompressed) {
+            var decrypted = aesDecrypt(data, options);
+            var binData = new Uint8Array(decrypted);
+            return uncompressed ? binData : pako.inflate(binData);
+        }
+        function aesDecrypt(ivCiphertext, options) {
+            if (ivCiphertext.length < 16 || ivCiphertext.length % 16 != 0) {
+                throw { name: "invalid ciphertext" };
+            }
+            var iv = converters.byteArrayToWordArray(ivCiphertext.slice(0, 16));
+            var ciphertext = converters.byteArrayToWordArray(ivCiphertext.slice(16));
+            var sharedKey = options.sharedKey.slice(0);
+            for (var i = 0; i < 32; i++) {
+                sharedKey[i] ^= options.nonce[i];
+            }
+            var key = CryptoJS.SHA256(converters.byteArrayToWordArray(sharedKey));
+            var encrypted = CryptoJS.lib.CipherParams.create({
+                ciphertext: ciphertext,
+                iv: iv,
+                key: key
+            });
+            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
+                iv: iv
+            });
+            var plaintext = converters.wordArrayToByteArray(decrypted);
+            return plaintext;
+        }
+        var PassphraseEncryptedMessage = (function () {
+            function PassphraseEncryptedMessage(ciphertext, salt, iv, HMAC) {
+                this.ciphertext = ciphertext;
+                this.salt = salt;
+                this.iv = iv;
+                this.HMAC = HMAC;
+            }
+            PassphraseEncryptedMessage.decode = function (encoded) {
+                var json = JSON.parse(encoded);
+                return new PassphraseEncryptedMessage(json[0], json[1], json[2], json[3]);
+            };
+            PassphraseEncryptedMessage.prototype.encode = function () {
+                return JSON.stringify([
+                    this.ciphertext,
+                    this.salt,
+                    this.iv,
+                    this.HMAC
+                ]);
+            };
+            return PassphraseEncryptedMessage;
+        }());
+        crypto_1.PassphraseEncryptedMessage = PassphraseEncryptedMessage;
+        function passphraseEncrypt(message, passphrase) {
+            var salt = CryptoJS.lib.WordArray.random(256 / 8);
+            var key = CryptoJS.PBKDF2(passphrase, salt, { iterations: 10, hasher: CryptoJS.algo.SHA256 });
+            var iv = CryptoJS.lib.WordArray.random(128 / 8);
+            var encrypted = CryptoJS.AES.encrypt(message, key, { iv: iv });
+            var ciphertext = CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
+            var salt_str = CryptoJS.enc.Hex.stringify(salt);
+            var iv_str = CryptoJS.enc.Hex.stringify(iv);
+            var key_str = CryptoJS.enc.Hex.stringify(key);
+            var HMAC = CryptoJS.HmacSHA256(ciphertext + iv_str, key_str);
+            var HMAC_str = CryptoJS.enc.Hex.stringify(HMAC);
+            return new PassphraseEncryptedMessage(ciphertext, salt_str, iv_str, HMAC_str);
+        }
+        crypto_1.passphraseEncrypt = passphraseEncrypt;
+        function passphraseDecrypt(cp, passphrase) {
+            var iv = CryptoJS.enc.Hex.parse(cp.iv);
+            var salt = CryptoJS.enc.Hex.parse(cp.salt);
+            var key = CryptoJS.PBKDF2(passphrase, salt, { iterations: 10, hasher: CryptoJS.algo.SHA256 });
+            var ciphertext = CryptoJS.enc.Base64.parse(cp.ciphertext);
+            var key_str = CryptoJS.enc.Hex.stringify(key);
+            var HMAC = CryptoJS.HmacSHA256(cp.ciphertext + cp.iv, key_str);
+            var HMAC_str = CryptoJS.enc.Hex.stringify(HMAC);
+            if (HMAC_str != cp.HMAC) {
+                return null;
+            }
+            var _cp = CryptoJS.lib.CipherParams.create({
+                ciphertext: ciphertext
+            });
+            var decrypted = CryptoJS.AES.decrypt(_cp, key, { iv: iv });
+            return decrypted.toString(CryptoJS.enc.Utf8);
+        }
+        crypto_1.passphraseDecrypt = passphraseDecrypt;
+    })(crypto = heat.crypto || (heat.crypto = {}));
+})(heat || (heat = {}));
+var heat;
+(function (heat) {
+    var easing;
+    (function (easing) {
+        function linear(t) { return t; }
+        easing.linear = linear;
+        function easeInQuad(t) { return t * t; }
+        easing.easeInQuad = easeInQuad;
+        function easeOutQuad(t) { return t * (2 - t); }
+        easing.easeOutQuad = easeOutQuad;
+        function easeInOutQuad(t) { return t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+        easing.easeInOutQuad = easeInOutQuad;
+        function easeInCubic(t) { return t * t * t; }
+        easing.easeInCubic = easeInCubic;
+        function easeOutCubic(t) { return (--t) * t * t + 1; }
+        easing.easeOutCubic = easeOutCubic;
+        function easeInOutCubic(t) { return t < .5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1; }
+        easing.easeInOutCubic = easeInOutCubic;
+        function easeInQuart(t) { return t * t * t * t; }
+        easing.easeInQuart = easeInQuart;
+        function easeOutQuart(t) { return 1 - (--t) * t * t * t; }
+        easing.easeOutQuart = easeOutQuart;
+        function easeInOutQuart(t) { return t < .5 ? 8 * t * t * t * t : 1 - 8 * (--t) * t * t * t; }
+        easing.easeInOutQuart = easeInOutQuart;
+        function easeInQuint(t) { return t * t * t * t * t; }
+        easing.easeInQuint = easeInQuint;
+        function easeOutQuint(t) { return 1 + (--t) * t * t * t * t; }
+        easing.easeOutQuint = easeOutQuint;
+        function easeInOutQuint(t) { return t < .5 ? 16 * t * t * t * t * t : 1 + 16 * (--t) * t * t * t * t; }
+        easing.easeInOutQuint = easeInOutQuint;
+    })(easing = heat.easing || (heat.easing = {}));
+})(heat || (heat = {}));
+var EventEmitter = (function () {
+    function EventEmitter() {
+        this.cache = new EventEmitterCache();
+    }
+    EventEmitter.prototype.addListener = function (event, listener) {
+        this.cache.add(event, listener);
+    };
+    EventEmitter.prototype.removeListener = function (event, listener) {
+        this.cache.remove(event, listener);
+    };
+    EventEmitter.prototype.on = function (event, listener) {
+        this.addListener(event, listener);
+    };
+    EventEmitter.prototype.removeAllListeners = function (event) {
+        var _this = this;
+        if (angular.isDefined(event)) {
+            this.cache.get(event).forEach(function (listener) {
+                _this.cache.remove(event, listener);
+            });
+        }
+        else {
+            this.cache.clear();
+        }
+    };
+    EventEmitter.prototype.emit = function (event) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        this.cache.get(event).forEach(function (listener) {
+            listener.apply(null, args);
+        });
+    };
+    return EventEmitter;
+}());
+var EventEmitterCache = (function () {
+    function EventEmitterCache() {
+        this.cache = {};
+    }
+    EventEmitterCache.prototype.clear = function () {
+        this.cache = {};
+    };
+    EventEmitterCache.prototype.add = function (event, listener) {
+        if (!angular.isDefined(this.cache[event])) {
+            this.cache[event] = [];
+        }
+        this.cache[event].push(listener);
+    };
+    EventEmitterCache.prototype.remove = function (event, listener) {
+        if (angular.isDefined(this.cache[event])) {
+            this.cache[event] = this.cache[event].filter(function (l) { return l != listener; });
+            if (this.cache[event].length === 0) {
+                delete this.cache[event];
+            }
+        }
+    };
+    EventEmitterCache.prototype.get = function (event) {
+        return this.cache[event] || [];
+    };
+    return EventEmitterCache;
+}());
+heat.Loader.directive('inputClear', function () {
+    return {
+        restrict: 'A',
+        compile: function (element, attrs) {
+            var color = attrs.inputClear;
+            var action = attrs.ngModel + " = ''";
+            element.after('<md-button aria-label="Close" class="animate-show md-icon-button md-accent"' +
+                'ng-show="' + attrs.ngModel + '" ng-click="' + action + '"' +
+                'style="position: absolute; top: 0px; right: -2px; margin-right:0px;">' +
+                '<md-icon style="color:black;font-size: 18px;" md-font-library="material-icons">close</md-icon>' +
+                '</md-button>');
+        }
+    };
+});
+var heat;
+(function (heat) {
+    var Iterator = (function () {
+        function Iterator(array) {
+            this.array = array;
+            this.cursor = 0;
+        }
+        Iterator.prototype.hasMore = function () {
+            return this.cursor < this.array.length;
+        };
+        Iterator.prototype.next = function () {
+            return this.array[this.cursor++];
+        };
+        Iterator.prototype.peek = function () {
+            return this.array[this.cursor];
+        };
+        return Iterator;
+    }());
+    heat.Iterator = Iterator;
+})(heat || (heat = {}));
+if (!Array.prototype['find']) {
+    Array.prototype['find'] = function (predicate) {
+        if (this === null) {
+            throw new TypeError('Array.prototype.find called on null or undefined');
+        }
+        if (typeof predicate !== 'function') {
+            throw new TypeError('predicate must be a function');
+        }
+        var list = Object(this);
+        var length = list.length >>> 0;
+        var thisArg = arguments[1];
+        var value;
+        for (var i = 0; i < length; i++) {
+            value = list[i];
+            if (predicate.call(thisArg, value, i, list)) {
+                return value;
+            }
+        }
+        return undefined;
+    };
+}
+if (!String.prototype['repeat']) {
+    String.prototype['repeat'] = function (count) {
+        'use strict';
+        if (this == null) {
+            throw new TypeError('can\'t convert ' + this + ' to object');
+        }
+        var str = '' + this;
+        count = +count;
+        if (count != count) {
+            count = 0;
+        }
+        if (count < 0) {
+            throw new RangeError('repeat count must be non-negative');
+        }
+        if (count == Infinity) {
+            throw new RangeError('repeat count must be less than infinity');
+        }
+        count = Math.floor(count);
+        if (str.length == 0 || count == 0) {
+            return '';
+        }
+        if (str.length * count >= 1 << 28) {
+            throw new RangeError('repeat count must not overflow maximum string size');
+        }
+        var rpt = '';
+        for (;;) {
+            if ((count & 1) == 1) {
+                rpt += str;
+            }
+            count >>>= 1;
+            if (count == 0) {
+                break;
+            }
+            str += str;
+        }
+        return rpt;
+    };
+}
+var utils;
+(function (utils) {
+    function unformat(commaFormatted) {
+        return commaFormatted ? commaFormatted.replace(/,/g, "") : "0";
+    }
+    utils.unformat = unformat;
+    function commaFormat(amount) {
+        if (typeof amount == 'undefined') {
+            return '0';
+        }
+        amount = amount.replace(/,/g, '');
+        var neg = amount.indexOf('-') == 0;
+        if (neg) {
+            amount = amount.substr(1);
+        }
+        amount = amount.split('.');
+        var parts = amount[0].split("").reverse().join("").split(/(\d{3})/).reverse();
+        var format = [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) {
+                format.push(parts[i].split('').reverse().join(''));
+            }
+        }
+        return (neg ? '-' : '') + format.join(',') + (amount.length == 2 ? ('.' + amount[1]) : '');
+    }
+    utils.commaFormat = commaFormat;
+    function isNumber(value) {
+        var num = String(value).replace(/,/g, '');
+        if (num.match(/^\d+$/)) {
+            return true;
+        }
+        else if (num.match(/^\d+\.\d+$/)) {
+            return true;
+        }
+        return false;
+    }
+    utils.isNumber = isNumber;
+    function isHex(value) {
+        if (!angular.isString(value))
+            return false;
+        var s = value.startsWith("0x") ? value.substr(2) : value;
+        return (/^[0-9a-fA-F]+$/.test(s));
+    }
+    utils.isHex = isHex;
+    function isTimeWithinThreasholdLimit(inputTime) {
+        return ((inputTime * 1000) + 6 * 60 * 60 * 1000) > new Date().getTime();
+    }
+    utils.isTimeWithinThreasholdLimit = isTimeWithinThreasholdLimit;
+    function hasToManyDecimals(value, decimals) {
+        var num = String(value).replace(/,/g, '');
+        var parts = num.split(".");
+        if (parts[1]) {
+            var fractional = parts[1].replace(/[\s0]*$/g, "");
+            if (fractional.length > decimals)
+                return true;
+        }
+        return false;
+    }
+    utils.hasToManyDecimals = hasToManyDecimals;
+    function parseResponse(response) {
+        var parsed = {};
+        if (angular.isString(response)) {
+            try {
+                parsed = JSON.parse(response);
+            }
+            catch (e) {
+                parsed = { heatUtilParsingError: response || e.toString() };
+            }
+        }
+        else {
+            parsed = response;
+        }
+        return parsed;
+    }
+    utils.parseResponse = parseResponse;
+    function ardorTimestampToDate(timestamp) {
+        return new Date(Date.UTC(2018, 0, 1, 0, 0, 0, 0) + timestamp * 1000);
+    }
+    utils.ardorTimestampToDate = ardorTimestampToDate;
+    function nemTimestampToDate(timestamp) {
+        return new Date(Date.UTC(2015, 2, 29, 0, 5, 36, 25) + timestamp * 1000);
+    }
+    utils.nemTimestampToDate = nemTimestampToDate;
+    var BASE_DATE;
+    function isBaseDate() {
+        return !!BASE_DATE;
+    }
+    utils.isBaseDate = isBaseDate;
+    function setBaseTimestamp(timestamp) {
+        BASE_DATE = timestamp;
+    }
+    utils.setBaseTimestamp = setBaseTimestamp;
+    function timestampToDate(timestamp) {
+        return new Date(BASE_DATE + timestamp * 1000);
+    }
+    utils.timestampToDate = timestampToDate;
+    function epochTime(timestamp) {
+        var t = timestamp ? timestamp : Date.now();
+        return (t - BASE_DATE + 500) / 1000;
+    }
+    utils.epochTime = epochTime;
+    function isAssetExpired(assetExpiration) {
+        return assetExpiration ? assetExpiration <= epochTime() : false;
+    }
+    utils.isAssetExpired = isAssetExpired;
+    function roundTo(value, decimals) {
+        return String(parseFloat(value).toFixed(decimals));
+    }
+    utils.roundTo = roundTo;
+    function delayPromise(promise, delay) {
+        var $q = heat.$inject.get('$q');
+        var deferred = $q.defer();
+        var result, resolved = false, rejected = false;
+        var timeout = setTimeout(function () {
+            timeout = null;
+            if (resolved) {
+                deferred.resolve(result);
+            }
+            else if (rejected) {
+                deferred.reject(result);
+            }
+        }, delay);
+        promise.then(function (r) {
+            result = r;
+            resolved = true;
+            if (timeout === null) {
+                deferred.resolve(r);
+            }
+        }, function (r) {
+            result = r;
+            rejected = true;
+            if (timeout === null) {
+                deferred.reject(r);
+            }
+        });
+        return deferred.promise;
+    }
+    utils.delayPromise = delayPromise;
+    var timeoutError = new Error("promise time is up");
+    function timeoutPromise(promise, time) {
+        var timer;
+        return Promise.race([
+            promise,
+            new Promise(function (resolve, reject) { return timer = setTimeout(reject, time, timeoutError); })
+        ]).finally(function () { return clearTimeout(timer); });
+    }
+    utils.timeoutPromise = timeoutPromise;
+    function convertToNQT(amountNXT) {
+        if (typeof amountNXT == 'undefined') {
+            return '0';
+        }
+        amountNXT = String(amountNXT).replace(/,/g, '');
+        var parts = amountNXT.split(".");
+        var amount = parts[0];
+        if (parts.length == 1) {
+            var fraction;
+            fraction = "00000000";
+        }
+        else if (parts.length == 2) {
+            if (parts[1].length <= 8) {
+                var fraction = parts[1];
+            }
+            else {
+                var fraction = parts[1].substring(0, 8);
+            }
+        }
+        else {
+            throw "Invalid input";
+        }
+        for (var i = fraction.length; i < 8; i++) {
+            fraction += "0";
+        }
+        var result = amount + "" + fraction;
+        if (!/^\d+$/.test(result)) {
+            throw "Invalid input.";
+        }
+        result = result.replace(/^0+/, "");
+        if (result === "") {
+            result = "0";
+        }
+        return result;
+    }
+    utils.convertToNQT = convertToNQT;
+    function formatQNT(quantity, decimals, returnNullZero) {
+        var asfloat = utils.convertToQNTf(quantity);
+        var cf = utils.commaFormat(asfloat);
+        var parts = cf.split('.');
+        var result;
+        if (!parts[1]) {
+            result = parts[0] + (decimals > 0 ? "." + "0".repeat(decimals) : "");
+        }
+        else if (parts[1].length > decimals) {
+            var i = parts[1].length - 1;
+            while (parts[1].length > decimals) {
+                if (parts[1][i] == "0") {
+                    parts[1] = parts[i].slice(0, -1);
+                    i--;
+                    continue;
+                }
+                break;
+            }
+            result = parts[0] + "." + parts[1];
+        }
+        else {
+            result = parts[0] + "." + parts[1] + "0".repeat(decimals - parts[1].length);
+        }
+        return returnNullZero && !result.match(/[^0\.]/) ? null : result;
+    }
+    utils.formatQNT = formatQNT;
+    function formatBytes(bytes, decimals) {
+        if (decimals === void 0) { decimals = 2; }
+        if (!+bytes)
+            return '0 Bytes';
+        var k = 1024;
+        var dm = decimals < 0 ? 0 : decimals;
+        var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return "".concat(parseFloat((bytes / Math.pow(k, i)).toFixed(dm)), " ").concat(sizes[i]);
+    }
+    utils.formatBytes = formatBytes;
+    function formatERC20TokenAmount(amount, decimals, fixed) {
+        if (decimals == 0)
+            return amount;
+        var s = amount.padStart(amount.length > decimals ? decimals : decimals + 1, "0");
+        var decimalPos = s.length - decimals;
+        var decimalPart = s.substr(decimalPos, s.length);
+        if (!fixed) {
+            var tailZeroCount = 0;
+            for (var i = decimalPart.length - 1; i >= 0; i--) {
+                if (decimalPart[i] == "0") {
+                    tailZeroCount++;
+                }
+                else {
+                    break;
+                }
+            }
+            decimalPart = decimalPart.substr(0, decimalPart.length - tailZeroCount);
+        }
+        var integerPart = utils.commaFormat(s.substr(0, decimalPos) || "0");
+        return integerPart + (decimalPart ? numberSeparator.decimal + decimalPart : "");
+    }
+    utils.formatERC20TokenAmount = formatERC20TokenAmount;
+    var numberSeparator = { decimal: getSeparator("decimal", "EN-en"), group: getSeparator("group", "EN-en") };
+    function getSeparator(separatorType, locale) {
+        var numberWithGroupAndDecimalSeparator = 1000.1;
+        return Intl.NumberFormat(locale)
+            .formatToParts(numberWithGroupAndDecimalSeparator)
+            .find(function (part) { return part.type === separatorType; })
+            .value;
+    }
+    function trimDecimals(formatted, decimals) {
+        var parts = formatted.split(".");
+        if (!parts[1])
+            parts[1] = "0".repeat(decimals);
+        else
+            parts[1] = parts[1].substr(0, decimals);
+        if (parts[1].length < decimals)
+            parts[1] += "0".repeat(decimals - parts[1].length);
+        return parts[0] + "." + parts[1];
+    }
+    utils.trimDecimals = trimDecimals;
+    function convertToQNTf(quantity, decimals) {
+        if (decimals === void 0) { decimals = 8; }
+        if (typeof quantity == 'undefined')
+            return '0';
+        if (typeof quantity == 'number')
+            quantity = "" + quantity;
+        if (quantity.length < decimals) {
+            for (var i = quantity.length; i < decimals; i++) {
+                quantity = "0" + quantity;
+            }
+        }
+        var afterComma = "";
+        if (decimals) {
+            afterComma = "." + quantity.substring(quantity.length - decimals);
+            quantity = quantity.substring(0, quantity.length - decimals);
+            if (!quantity) {
+                quantity = "0";
+            }
+            afterComma = afterComma.replace(/0+$/, "");
+            if (afterComma == ".") {
+                afterComma = "";
+            }
+        }
+        return quantity + afterComma;
+    }
+    utils.convertToQNTf = convertToQNTf;
+    var DIVIDER_100_MILIONS = new Big(100000000);
+    function calculateTotalOrderPriceQNT(quantityQNT, priceQNT) {
+        return new Big(quantityQNT).times(new Big(priceQNT).div(DIVIDER_100_MILIONS)).round().toString();
+    }
+    utils.calculateTotalOrderPriceQNT = calculateTotalOrderPriceQNT;
+    var ConvertToQNTError = (function () {
+        function ConvertToQNTError(message, code) {
+            this.message = message;
+            this.code = code;
+            this.name = "ConvertToQNTError";
+        }
+        return ConvertToQNTError;
+    }());
+    utils.ConvertToQNTError = ConvertToQNTError;
+    var ALL_ASSETS_DECIMALS = 8;
+    function convertToQNT(quantity, decimals) {
+        if (decimals === void 0) { decimals = 8; }
+        var parts = quantity.split(".");
+        var qnt = parts[0];
+        if (parts.length == 1) {
+            for (var i = 0; i < ALL_ASSETS_DECIMALS; i++) {
+                qnt += "0";
+            }
+        }
+        else if (parts.length == 2) {
+            var fraction = parts[1];
+            if (fraction.length > ALL_ASSETS_DECIMALS) {
+                throw new ConvertToQNTError("Fraction can only have " + ALL_ASSETS_DECIMALS + " decimals max.", 1);
+            }
+            else if (fraction.length < ALL_ASSETS_DECIMALS) {
+                for (var i = fraction.length; i < ALL_ASSETS_DECIMALS; i++) {
+                    fraction += "0";
+                }
+            }
+            qnt += fraction;
+        }
+        else {
+            throw new ConvertToQNTError("Incorrect input", 2);
+        }
+        if (!/^\d+$/.test(qnt)) {
+            throw new ConvertToQNTError("Invalid input. Only numbers and a dot are accepted.", 3);
+        }
+        var result = qnt.replace(/^0+/, "");
+        var lastZeros = ALL_ASSETS_DECIMALS - decimals;
+        return result.length > lastZeros
+            ? result.substr(0, result.length - lastZeros) + '0'.repeat(lastZeros)
+            : result;
+    }
+    utils.convertToQNT = convertToQNT;
+    function getByteLen(value) {
+        var byteLen = 0;
+        for (var i = 0; i < value.length; i++) {
+            var c = value.charCodeAt(i);
+            byteLen += c < (1 << 7) ? 1 :
+                c < (1 << 11) ? 2 :
+                    c < (1 << 16) ? 3 :
+                        c < (1 << 21) ? 4 :
+                            c < (1 << 26) ? 5 :
+                                c < (1 << 31) ? 6 : Number.NaN;
+        }
+        return byteLen;
+    }
+    utils.getByteLen = getByteLen;
+    function debounce(func, wait, immediate) {
+        var timeout;
+        return function () {
+            var context = this, args = arguments;
+            var later = function () {
+                timeout = null;
+                if (!immediate)
+                    func.apply(context, args);
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait || 100);
+            if (callNow)
+                func.apply(context, args);
+        };
+    }
+    utils.debounce = debounce;
+    ;
+    function repeatWhile(delay, cb) {
+        var fn = function () {
+            if (cb()) {
+                clearInterval(interval);
+            }
+        };
+        var interval = setInterval(fn, delay);
+    }
+    utils.repeatWhile = repeatWhile;
+    function emptyToNull(input) {
+        return (angular.isString(input) && input.trim().length == 0) ? null : input;
+    }
+    utils.emptyToNull = emptyToNull;
+    function uuidv4() {
+        return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
+            return (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16);
+        });
+    }
+    utils.uuidv4 = uuidv4;
+    utils.helper = {
+        useLocalServer: function () {
+            heat.$inject.get('heat').switchToServer({ way: "local", failoverEnabled: false, sameMessagingHost: false });
+        },
+        useRemoteServer: function (serverDescriptor) {
+            heat.$inject.get('heat').switchToServer({ way: "remote", failoverEnabled: true, sameMessagingHost: false }, serverDescriptor);
+        },
+    };
+})(utils || (utils = {}));
 var AbiDecoderService = (function () {
     function AbiDecoderService(web3, $window) {
         this.web3 = web3;
@@ -9753,67 +10080,6 @@ var SecretGeneratorService = (function () {
     ], SecretGeneratorService);
     return SecretGeneratorService;
 }());
-var EventEmitter = (function () {
-    function EventEmitter() {
-        this.cache = new EventEmitterCache();
-    }
-    EventEmitter.prototype.addListener = function (event, listener) {
-        this.cache.add(event, listener);
-    };
-    EventEmitter.prototype.removeListener = function (event, listener) {
-        this.cache.remove(event, listener);
-    };
-    EventEmitter.prototype.on = function (event, listener) {
-        this.addListener(event, listener);
-    };
-    EventEmitter.prototype.removeAllListeners = function (event) {
-        var _this = this;
-        if (angular.isDefined(event)) {
-            this.cache.get(event).forEach(function (listener) {
-                _this.cache.remove(event, listener);
-            });
-        }
-        else {
-            this.cache.clear();
-        }
-    };
-    EventEmitter.prototype.emit = function (event) {
-        var args = [];
-        for (var _i = 1; _i < arguments.length; _i++) {
-            args[_i - 1] = arguments[_i];
-        }
-        this.cache.get(event).forEach(function (listener) {
-            listener.apply(null, args);
-        });
-    };
-    return EventEmitter;
-}());
-var EventEmitterCache = (function () {
-    function EventEmitterCache() {
-        this.cache = {};
-    }
-    EventEmitterCache.prototype.clear = function () {
-        this.cache = {};
-    };
-    EventEmitterCache.prototype.add = function (event, listener) {
-        if (!angular.isDefined(this.cache[event])) {
-            this.cache[event] = [];
-        }
-        this.cache[event].push(listener);
-    };
-    EventEmitterCache.prototype.remove = function (event, listener) {
-        if (angular.isDefined(this.cache[event])) {
-            this.cache[event] = this.cache[event].filter(function (l) { return l != listener; });
-            if (this.cache[event].length === 0) {
-                delete this.cache[event];
-            }
-        }
-    };
-    EventEmitterCache.prototype.get = function (event) {
-        return this.cache[event] || [];
-    };
-    return EventEmitterCache;
-}());
 var ServerService = (function (_super) {
     __extends(ServerService, _super);
     function ServerService($rootScope, $q, $interval, $timeout, settings, user, $mdToast) {
@@ -10074,7 +10340,7 @@ var SettingsService = (function () {
         this.env = env;
         this.http = http;
         this.VERSION = "4.5.2";
-        this.BUILD = "2025-01-23";
+        this.BUILD = "2025-01-24";
         this.failoverEnabled = true;
         this.settings = {};
         this.applyFailoverConfig();
@@ -10996,1149 +11262,883 @@ var Web3Service = (function () {
     ], Web3Service);
     return Web3Service;
 }());
-var converters;
-(function (converters) {
-    var charToNibble = {};
-    var nibbleToChar = [];
-    var i;
-    for (i = 0; i <= 9; ++i) {
-        var character = i.toString();
-        charToNibble[character] = i;
-        nibbleToChar.push(character);
-    }
-    for (i = 10; i <= 15; ++i) {
-        var lowerChar = String.fromCharCode('a'.charCodeAt(0) + i - 10);
-        var upperChar = String.fromCharCode('A'.charCodeAt(0) + i - 10);
-        charToNibble[lowerChar] = i;
-        charToNibble[upperChar] = i;
-        nibbleToChar.push(lowerChar);
-    }
-    function byteArrayToHexString(bytes) {
-        var str = '';
-        for (var i = 0; i < bytes.length; ++i) {
-            if (bytes[i] < 0) {
-                bytes[i] += 256;
-            }
-            str += nibbleToChar[bytes[i] >> 4] + nibbleToChar[bytes[i] & 0x0F];
-        }
-        return str;
-    }
-    converters.byteArrayToHexString = byteArrayToHexString;
-    function stringToByteArray(stringValue) {
-        var str = unescape(encodeURIComponent(stringValue));
-        var bytes = new Array(str.length);
-        for (var i = 0; i < str.length; ++i) {
-            bytes[i] = str.charCodeAt(i);
-        }
-        return bytes;
-    }
-    converters.stringToByteArray = stringToByteArray;
-    function hexStringToByteArray(str) {
-        var bytes = [];
-        var i = 0;
-        if (0 !== str.length % 2) {
-            bytes.push(charToNibble[str.charAt(0)]);
-            ++i;
-        }
-        for (; i < str.length - 1; i += 2) {
-            bytes.push((charToNibble[str.charAt(i)] << 4) + charToNibble[str.charAt(i + 1)]);
-        }
-        return bytes;
-    }
-    converters.hexStringToByteArray = hexStringToByteArray;
-    function stringToHexString(str) {
-        return byteArrayToHexString(stringToByteArray(str));
-    }
-    converters.stringToHexString = stringToHexString;
-    function hexStringToString(hex) {
-        return byteArrayToString(hexStringToByteArray(hex));
-    }
-    converters.hexStringToString = hexStringToString;
-    function checkBytesToIntInput(bytes, numBytes, opt_startIndex) {
-        var startIndex = opt_startIndex || 0;
-        if (startIndex < 0) {
-            throw new Error('Start index should not be negative');
-        }
-        if (bytes.length < startIndex + numBytes) {
-            throw new Error('Need at least ' + (numBytes) + ' bytes to convert to an integer');
-        }
-        return startIndex;
-    }
-    function byteArrayToSignedShort(bytes, opt_startIndex) {
-        var index = checkBytesToIntInput(bytes, 2, opt_startIndex);
-        var value = bytes[index];
-        value += bytes[index + 1] << 8;
-        return value;
-    }
-    converters.byteArrayToSignedShort = byteArrayToSignedShort;
-    function byteArrayToSignedInt32(bytes, opt_startIndex) {
-        var index = checkBytesToIntInput(bytes, 4, opt_startIndex);
-        var value = bytes[index];
-        value += bytes[index + 1] << 8;
-        value += bytes[index + 2] << 16;
-        value += bytes[index + 3] << 24;
-        return value;
-    }
-    converters.byteArrayToSignedInt32 = byteArrayToSignedInt32;
-    function byteArrayToBigInteger(bytes, opt_startIndex) {
-        var index = checkBytesToIntInput(bytes, 8, opt_startIndex);
-        var value = new BigInteger("0", 10);
-        var temp1, temp2;
-        for (var i = 7; i >= 0; i--) {
-            temp1 = value.multiply(new BigInteger("256", 10));
-            temp2 = temp1.add(new BigInteger(bytes[opt_startIndex + i].toString(10), 10));
-            value = temp2;
-        }
-        return value;
-    }
-    converters.byteArrayToBigInteger = byteArrayToBigInteger;
-    function byteArrayToWordArray(byteArray) {
-        var i = 0, offset = 0, word = 0, len = byteArray.length;
-        var words = new Uint32Array(((len / 4) | 0) + (len % 4 == 0 ? 0 : 1));
-        while (i < (len - (len % 4))) {
-            words[offset++] = (byteArray[i++] << 24) | (byteArray[i++] << 16) | (byteArray[i++] << 8) | (byteArray[i++]);
-        }
-        if (len % 4 != 0) {
-            word = byteArray[i++] << 24;
-            if (len % 4 > 1) {
-                word = word | byteArray[i++] << 16;
-            }
-            if (len % 4 > 2) {
-                word = word | byteArray[i++] << 8;
-            }
-            words[offset] = word;
-        }
-        return { sigBytes: len, words: words };
-    }
-    converters.byteArrayToWordArray = byteArrayToWordArray;
-    function wordArrayToByteArray(wordArray) {
-        var len = wordArray.words.length;
-        if (len == 0) {
-            return new Array(0);
-        }
-        var byteArray = new Array(wordArray.sigBytes);
-        var offset = 0, word, i;
-        for (i = 0; i < len - 1; i++) {
-            word = wordArray.words[i];
-            byteArray[offset++] = word >> 24;
-            byteArray[offset++] = (word >> 16) & 0xff;
-            byteArray[offset++] = (word >> 8) & 0xff;
-            byteArray[offset++] = word & 0xff;
-        }
-        word = wordArray.words[len - 1];
-        byteArray[offset++] = word >> 24;
-        if (wordArray.sigBytes % 4 == 0) {
-            byteArray[offset++] = (word >> 16) & 0xff;
-            byteArray[offset++] = (word >> 8) & 0xff;
-            byteArray[offset++] = word & 0xff;
-        }
-        if (wordArray.sigBytes % 4 > 1) {
-            byteArray[offset++] = (word >> 16) & 0xff;
-        }
-        if (wordArray.sigBytes % 4 > 2) {
-            byteArray[offset++] = (word >> 8) & 0xff;
-        }
-        return byteArray;
-    }
-    converters.wordArrayToByteArray = wordArrayToByteArray;
-    function byteArrayToString(bytes, opt_startIndex, length) {
-        if (length == 0) {
-            return "";
-        }
-        if (opt_startIndex && length) {
-            var index = checkBytesToIntInput(bytes, parseInt(length, 10), parseInt(opt_startIndex, 10));
-            bytes = bytes.slice(opt_startIndex, opt_startIndex + length);
-        }
-        return byteArrayToStringInternal(bytes);
-    }
-    converters.byteArrayToString = byteArrayToString;
-    function byteArrayToStringInternal(bytes) {
-        var result = "";
-        var chunkSize = 20000;
-        if (bytes.length > chunkSize) {
-            var pos = 0;
-            while (pos < bytes.length) {
-                var shift = 0;
-                while (shift < 3) {
-                    try {
-                        var escaped = escape(String.fromCharCode.apply(null, bytes.slice(pos, pos + chunkSize + shift)));
-                        result = result + decodeURIComponent(escaped);
-                        pos = pos + chunkSize + shift;
-                        break;
+var dialogs;
+(function (dialogs) {
+    function about($event) {
+        var settings = heat.$inject.get('settings');
+        var env = heat.$inject.get('env');
+        dialogs.dialog({
+            id: 'about',
+            title: 'About',
+            targetEvent: $event,
+            template: "\n        <p>{{vm.applicationName}} {{vm.applicationVersion}}<br>Build date: {{vm.applicationBuild}}</p>\n        <p>HEAT server {{vm.heatServerVersion}}<br>Build date: {{vm.heatServerBuildDate}}</p>\n        <p><a href=\"#\" ng-click=\"vm.goTo('main')\">Go to MAIN NET</a></p>\n        <p><a href=\"#\" ng-click=\"vm.goTo('test')\">Go to TEST NET</a></p>\n<!--        <p><a href=\"#\" ng-click=\"vm.goTo('beta')\">Go to BETA NET</a></p>-->\n        <p>\n<!--            <a ng-href=\"{{vm.benchmarkUrl}}\" target=\"_blank\" rel=\"noopener noreferrer\">BENCHMARK application</a><br/>-->\n            <a href=\"#\" ng-click=\"vm.goTo('bench')\">BENCHMARK application</a>\n        </p>\n        <br>\n        <p>Ethereum API <u>Powered by <a href=\"https://ethplorer.io\">Ethplorer.io</a></u></p>\n        <!--\n        <p><button onclick=\"gtag_report_conversion_signup(undefined)\">Signup Test</button></p>\n        <p><button onclick=\"gtag_report_conversion_bid(undefined, Date.now()+'')\">Bid Test</button></p>\n        <p><button onclick=\"gtag_report_conversion_signup_SECURE(undefined)\">Signup Test [SECURE]</button></p>\n        <p><button onclick=\"gtag_report_conversion_bid_SECURE(undefined, Date.now()+'')\">Bid Test [SECURE]</button></p>\n        -->\n\n      ",
+            locals: {
+                applicationName: settings.get(SettingsService.APPLICATION_NAME),
+                applicationVersion: settings.get(SettingsService.APPLICATION_VERSION),
+                applicationBuild: settings.get(SettingsService.APPLICATION_BUILD),
+                heatServerVersion: SettingsService.EMBEDDED_HEATLEDGER_VERSION,
+                heatServerBuildDate: SettingsService.EMBEDDED_HEATLEDGER_BUILD_DATE,
+                isTestnet: window.localStorage.getItem('testnet') == 'true',
+                benchmarkUrl: SettingsService.BENCHMARK_WEB_URL,
+                isEnvNodeJS: env.type == EnvType.NODEJS,
+                goTo: function (target) {
+                    window.localStorage.setItem('testnet', 'false');
+                    window.localStorage.setItem('betanet', 'false');
+                    if (target == 'test') {
+                        window.localStorage.setItem('testnet', 'true');
                     }
-                    catch (e) {
-                        console.debug("trying decode escaped string " + e);
+                    else if (target == 'beta') {
+                        window.localStorage.setItem('betanet', 'true');
                     }
-                    shift++;
+                    else if (target == 'bench') {
+                        if (env.type == EnvType.NODEJS) {
+                            var BrowserWindow = require('electron').remote.BrowserWindow;
+                            var benchWindow_1 = new BrowserWindow({
+                                width: 1200,
+                                height: 800,
+                                webPreferences: {
+                                    nodeIntegration: false
+                                },
+                                show: false,
+                                backgroundColor: '#d22424'
+                            });
+                            benchWindow_1.once('ready-to-show', function () {
+                                benchWindow_1.show();
+                            });
+                            benchWindow_1.loadURL(SettingsService.BENCHMARK_WEB_URL);
+                        }
+                        else {
+                            window.location.assign(SettingsService.BENCHMARK_WEB_URL);
+                        }
+                        return;
+                    }
+                    window.location.reload();
                 }
             }
-        }
-        else {
-            result = decodeURIComponent(escape(String.fromCharCode.apply(null, bytes)));
-        }
-        return result;
+        });
     }
-    function byteArrayToShortArray(byteArray) {
-        var shortArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        var i;
-        for (i = 0; i < 16; i++) {
-            shortArray[i] = byteArray[i * 2] | byteArray[i * 2 + 1] << 8;
-        }
-        return shortArray;
-    }
-    converters.byteArrayToShortArray = byteArrayToShortArray;
-    function shortArrayToByteArray(shortArray) {
-        var byteArray = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        var i;
-        for (i = 0; i < 16; i++) {
-            byteArray[2 * i] = shortArray[i] & 0xff;
-            byteArray[2 * i + 1] = shortArray[i] >> 8;
-        }
-        return byteArray;
-    }
-    converters.shortArrayToByteArray = shortArrayToByteArray;
-    function shortArrayToHexString(ary) {
-        var res = [];
-        for (var i = 0; i < ary.length; i++) {
-            res.push(nibbleToChar[(ary[i] >> 4) & 0x0f], nibbleToChar[ary[i] & 0x0f], nibbleToChar[(ary[i] >> 12) & 0x0f], nibbleToChar[(ary[i] >> 8) & 0x0f]);
-        }
-        return res.join("");
-    }
-    converters.shortArrayToHexString = shortArrayToHexString;
-    function int32ToBytes(x, opt_bigEndian) {
-        return intToBytes_(x, 4, 4294967295, opt_bigEndian);
-    }
-    converters.int32ToBytes = int32ToBytes;
-    function intToBytes_(x, numBytes, unsignedMax, opt_bigEndian) {
-        var signedMax = Math.floor(unsignedMax / 2);
-        var negativeMax = (signedMax + 1) * -1;
-        if (x != Math.floor(x) || x < negativeMax || x > unsignedMax) {
-            throw new Error(x + ' is not a ' + (numBytes * 8) + ' bit integer');
-        }
-        var bytes = [];
-        var current;
-        var numberType = x >= 0 && x <= signedMax ? 0 :
-            x > signedMax && x <= unsignedMax ? 1 : 2;
-        if (numberType == 2) {
-            x = (x * -1) - 1;
-        }
-        for (var i = 0; i < numBytes; i++) {
-            if (numberType == 2) {
-                current = 255 - (x % 256);
-            }
-            else {
-                current = x % 256;
-            }
-            if (opt_bigEndian) {
-                bytes.unshift(current);
-            }
-            else {
-                bytes.push(current);
-            }
-            if (numberType == 1) {
-                x = Math.floor(x / 256);
-            }
-            else {
-                x = x >> 8;
-            }
-        }
-        return bytes;
-    }
-    function arrayBufferToString(buf) {
-        return new TextDecoder().decode(buf);
-    }
-    converters.arrayBufferToString = arrayBufferToString;
-    function stringToArrayBuffer(str) {
-        return new TextEncoder().encode(str);
-    }
-    converters.stringToArrayBuffer = stringToArrayBuffer;
-    function concatenate(buffer1, buffer2) {
-        var temp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
-        temp.set(new Uint8Array(buffer1), 0);
-        temp.set(new Uint8Array(buffer2), buffer1.byteLength);
-        return temp.buffer;
-    }
-    converters.concatenate = concatenate;
-})(converters || (converters = {}));
-var heat;
-(function (heat) {
-    var crypto;
-    (function (crypto_1) {
-        var _hash = {
-            init: SHA256_init,
-            update: SHA256_write,
-            getBytes: SHA256_finalize
-        };
-        crypto_1.SHA256 = _hash;
-        function simpleHash(message) {
-            _hash.init();
-            _hash.update(message);
-            return _hash.getBytes();
-        }
-        function curve25519_clamp(curve) {
-            curve[0] &= 0xFFF8;
-            curve[15] &= 0x7FFF;
-            curve[15] |= 0x4000;
-            return curve;
-        }
-        function calculateStringHash(inputString) {
-            var hexString = converters.stringToHexString(inputString);
-            var bytes = converters.hexStringToByteArray(hexString);
-            var hashBytes = simpleHash(bytes);
-            return converters.byteArrayToHexString(hashBytes);
-        }
-        crypto_1.calculateStringHash = calculateStringHash;
-        function byteArrayToBigInteger(byteArray, startIndex) {
-            var value = new BigInteger("0", 10);
-            var temp1, temp2;
-            for (var i = byteArray.length - 1; i >= 0; i--) {
-                temp1 = value.multiply(new BigInteger("256", 10));
-                temp2 = temp1.add(new BigInteger(byteArray[i].toString(10), 10));
-                value = temp2;
-            }
-            return value;
-        }
-        function calculateFullHash(unsignedTransaction, signature) {
-            var unsignedTransactionBytes = converters.hexStringToByteArray(unsignedTransaction);
-            var signatureBytes = converters.hexStringToByteArray(signature);
-            var signatureHash = simpleHash(signatureBytes);
-            _hash.init();
-            _hash.update(unsignedTransactionBytes);
-            _hash.update(signatureHash);
-            var fullHash = _hash.getBytes();
-            return converters.byteArrayToHexString(fullHash);
-        }
-        crypto_1.calculateFullHash = calculateFullHash;
-        function fullNameToHash(fullNameUTF8) {
-            _hash.init();
-            _hash.update(converters.stringToByteArray(fullNameUTF8));
-            var slice = (converters.hexStringToByteArray(converters.byteArrayToHexString(_hash.getBytes()))).slice(0, 8);
-            return byteArrayToBigInteger(slice).toString();
-        }
-        crypto_1.fullNameToHash = fullNameToHash;
-        function calculateTransactionId(fullHashHex) {
-            var slice = (converters.hexStringToByteArray(fullHashHex)).slice(0, 8);
-            var transactionId = byteArrayToBigInteger(slice).toString();
-            return transactionId;
-        }
-        crypto_1.calculateTransactionId = calculateTransactionId;
-        function secretPhraseToPublicKey(secretPhrase) {
-            var secretHex = converters.stringToHexString(secretPhrase);
-            var secretPhraseBytes = converters.hexStringToByteArray(secretHex);
-            var digest = simpleHash(secretPhraseBytes);
-            return converters.byteArrayToHexString(curve25519.keygen(digest).p);
-        }
-        crypto_1.secretPhraseToPublicKey = secretPhraseToPublicKey;
-        function hash(text) {
-            var textBytes = converters.hexStringToByteArray(converters.stringToHexString(text));
-            var digest = simpleHash(textBytes);
-            return converters.byteArrayToHexString(digest);
-        }
-        crypto_1.hash = hash;
-        function getPrivateKey(secretPhrase) {
-            SHA256_init();
-            SHA256_write(converters.stringToByteArray(secretPhrase));
-            return converters.shortArrayToHexString(curve25519_clamp(converters.byteArrayToShortArray(SHA256_finalize())));
-        }
-        crypto_1.getPrivateKey = getPrivateKey;
-        function getAccountId(secretPhrase) {
-            var publicKey = this.secretPhraseToPublicKey(secretPhrase);
-            return this.getAccountIdFromPublicKey(publicKey);
-        }
-        crypto_1.getAccountId = getAccountId;
-        function getAccountIdFromPublicKey(publicKey) {
-            _hash.init();
-            _hash.update(converters.hexStringToByteArray(publicKey));
-            var account = _hash.getBytes();
-            var slice = (converters.hexStringToByteArray(converters.byteArrayToHexString(account))).slice(0, 8);
-            return byteArrayToBigInteger(slice).toString();
-        }
-        crypto_1.getAccountIdFromPublicKey = getAccountIdFromPublicKey;
-        function signBytes(message, secretPhrase) {
-            var messageBytes = converters.hexStringToByteArray(message);
-            var secretPhraseBytes = converters.hexStringToByteArray(secretPhrase);
-            var digest = simpleHash(secretPhraseBytes);
-            var s = curve25519.keygen(digest).s;
-            var m = simpleHash(messageBytes);
-            _hash.init();
-            _hash.update(m);
-            _hash.update(s);
-            var x = _hash.getBytes();
-            var y = curve25519.keygen(x).p;
-            _hash.init();
-            _hash.update(m);
-            _hash.update(y);
-            var h = _hash.getBytes();
-            var v = curve25519.sign(h, x, s);
-            return converters.byteArrayToHexString(v.concat(h));
-        }
-        crypto_1.signBytes = signBytes;
-        function verifyBytes(signature, message, publicKey) {
-            var signatureBytes = converters.hexStringToByteArray(signature);
-            var messageBytes = converters.hexStringToByteArray(message);
-            var publicKeyBytes = converters.hexStringToByteArray(publicKey);
-            var v = signatureBytes.slice(0, 32);
-            var h = signatureBytes.slice(32);
-            var y = curve25519.verify(v, h, publicKeyBytes);
-            var m = simpleHash(messageBytes);
-            _hash.init();
-            _hash.update(m);
-            _hash.update(y);
-            var h2 = _hash.getBytes();
-            return areByteArraysEqual(h, h2);
-        }
-        crypto_1.verifyBytes = verifyBytes;
-        function areByteArraysEqual(bytes1, bytes2) {
-            if (bytes1.length !== bytes2.length) {
-                return false;
-            }
-            for (var i = 0; i < bytes1.length; ++i) {
-                if (bytes1[i] !== bytes2[i])
-                    return false;
-            }
-            return true;
-        }
-        function encryptNote(message, options, secretPhrase, uncompressed) {
-            if (!options.sharedKey) {
-                if (!options.privateKey) {
-                    options.privateKey = converters.hexStringToByteArray(this.getPrivateKey(secretPhrase));
-                }
-                if (!options.publicKey) {
-                    throw new Error('Missing publicKey argument');
-                }
-            }
-            var encrypted = encryptData(converters.stringToByteArray(message), options, uncompressed);
-            return {
-                "message": converters.byteArrayToHexString(encrypted.data),
-                "nonce": converters.byteArrayToHexString(encrypted.nonce)
-            };
-        }
-        crypto_1.encryptNote = encryptNote;
-        function encryptBinaryNote(message, options, secretPhrase, uncompressed) {
-            if (!options.sharedKey) {
-                if (!options.privateKey) {
-                    options.privateKey = converters.hexStringToByteArray(this.getPrivateKey(secretPhrase));
-                }
-                if (!options.publicKey) {
-                    throw new Error('Missing publicKey argument');
-                }
-            }
-            var encrypted = encryptData(message, options, uncompressed);
-            return {
-                "message": converters.byteArrayToHexString(encrypted.data),
-                "nonce": converters.byteArrayToHexString(encrypted.nonce)
-            };
-        }
-        crypto_1.encryptBinaryNote = encryptBinaryNote;
-        function encryptBinary(buffer, options, uncompressed) {
-            var crypto = window.crypto || window['msCrypto'];
-            if (!crypto)
-                throw new Error("Browser not supported");
-            if (!options.sharedKey)
-                options.sharedKey = getSharedKey(options.privateKey, options.publicKey);
-            options.nonce = new Uint8Array(32);
-            crypto.getRandomValues(options.nonce);
-            var compressedData = uncompressed ? new Uint8Array(buffer) : pako.gzip(new Uint8Array(buffer));
-            var data = aesEncrypt(compressedData, options);
-            return {
-                isText: false,
-                data: converters.byteArrayToHexString(data),
-                nonce: converters.byteArrayToHexString(options.nonce)
-            };
-        }
-        crypto_1.encryptBinary = encryptBinary;
-        function getSharedKey(key1, key2) {
-            return converters.shortArrayToByteArray(curve25519_(converters.byteArrayToShortArray(key1), converters.byteArrayToShortArray(key2), null));
-        }
-        crypto_1.getSharedKey = getSharedKey;
-        function encryptData(plaintext, options, uncompressed) {
-            var crypto = window.crypto || window['msCrypto'];
-            if (!crypto) {
-                throw new Error("Browser not supported");
-            }
-            if (!options.sharedKey) {
-                options.sharedKey = getSharedKey(options.privateKey, options.publicKey);
-            }
-            options.nonce = new Uint8Array(32);
-            crypto.getRandomValues(options.nonce);
-            var compressedPlaintext = uncompressed ? new Uint8Array(plaintext) : pako.gzip(new Uint8Array(plaintext));
-            var data = aesEncrypt(compressedPlaintext, options);
-            return {
-                "nonce": options.nonce,
-                "data": data
-            };
-        }
-        function aesEncrypt(plaintext, options) {
-            var crypto = window.crypto || window['msCrypto'];
-            var text = converters.byteArrayToWordArray(plaintext);
-            var sharedKey = options.sharedKey ? options.sharedKey.slice(0) :
-                getSharedKey(options.privateKey, options.publicKey);
-            for (var i = 0; i < 32; i++) {
-                sharedKey[i] ^= options.nonce[i];
-            }
-            var tmp = new Uint8Array(16);
-            crypto.getRandomValues(tmp);
-            var key = CryptoJS.SHA256(converters.byteArrayToWordArray(sharedKey));
-            var iv = converters.byteArrayToWordArray(tmp);
-            var encrypted = CryptoJS.AES.encrypt(text, key, {
-                iv: iv
+    dialogs.about = about;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function assetInfo($event, info) {
+        var assetInfoService = heat.$inject.get('assetInfo');
+        var unsafeWarning = "This asset is operated by a third party.\nHeat Ledger has no control over the asset and does not provide support for it.\nIt's possible the asset does NOT represent what you think it does.\nPlease ensure from asset issuer that the asset is valid before purchasing it, as there may be no refunds or redemptions available.\nAsset purchases are non-refundable.";
+        assetInfoService.getAssetDescription(info).then(function (description) {
+            var orderFeePercentage = parseInt(info.orderFee || '0') / 1000000;
+            var tradeFeePercentage = parseInt(info.tradeFee || '0') / 1000000;
+            var feeRecipient = (info.feeRecipient || '0') == '0' ? info.issuer : info.feeRecipient;
+            info.expired = utils.isAssetExpired(info.expiration);
+            dialogs.dialog({
+                id: 'assetInfo',
+                title: 'Asset Info',
+                targetEvent: $event,
+                cancelButton: false,
+                locals: {
+                    description: description,
+                    info: info,
+                    unsafeWarning: unsafeWarning,
+                    createdDate: utils.timestampToDate(info.timestamp).toLocaleString(),
+                    expirationDate: info.expiration == 0
+                        ? "no expiration"
+                        : (info.expiration ? utils.timestampToDate(info.expiration).toLocaleString() : null),
+                    orderFeePercentage: parseInt(info.orderFee || '0') / 1000000,
+                    tradeFeePercentage: parseInt(info.tradeFee || '0') / 1000000,
+                    feeRecipient: (info.feeRecipient || '0') == '0' ? info.issuer : info.feeRecipient
+                },
+                style: "\n          .grey {\n            color: darkgrey;\n          }\n        ",
+                template: "\n          <div layout=\"column\">\n            <span ng-if=\"!vm.info.certified\">{{vm.unsafeWarning}}<br><br></span>\n            <span><b>{{vm.info.symbol}}</b> {{vm.info.name}}</span>\n            <p class=\"grey\" ng-if=\"vm.info.type==1\">\n              <span>PRIVATE ASSET</span><br/>\n              Order fee: {{vm.orderFeePercentage}}% &nbsp;&nbsp;&nbsp;Trade fee: {{vm.tradeFeePercentage}}% &nbsp;&nbsp;&nbsp;Fee recipient: {{vm.feeRecipient}}\n            </p>\n            <p class=\"grey\">\n                id: {{vm.info.id}} &nbsp;&nbsp;&nbsp; decimals: {{vm.info.decimals}}<br/>\n                created: {{vm.createdDate}}<br/>\n                expiration: {{vm.expirationDate || \"-\"}} &nbsp;&nbsp;<b>{{vm.info.expired ? \"EXPIRED\" : \"\"}}</b><br/>\n                issuer: {{vm.info.issuerPublicName || vm.info.issuer}}\n            </p>\n            <pre>{{vm.description}}</pre>\n          </div>\n        "
             });
-            var ivOut = converters.wordArrayToByteArray(encrypted.iv);
-            var ciphertextOut = converters.wordArrayToByteArray(encrypted.ciphertext);
-            return ivOut.concat(ciphertextOut);
-        }
-        function encryptMessage(message, publicKey, secretPhrase, uncompressed) {
-            var options = {
-                "account": crypto.getAccountIdFromPublicKey(publicKey),
-                "publicKey": converters.hexStringToByteArray(publicKey)
-            };
-            var encrypted = heat.crypto.encryptNote(message, options, secretPhrase, uncompressed);
-            return {
-                isText: true,
-                data: encrypted.message,
-                nonce: encrypted.nonce
-            };
-        }
-        crypto_1.encryptMessage = encryptMessage;
-        function decryptMessage(data, nonce, publicKey, secretPhrase, uncompressed) {
-            return decrypt(decryptData, data, nonce, publicKey, secretPhrase, uncompressed);
-        }
-        crypto_1.decryptMessage = decryptMessage;
-        function decryptBinary(data, nonce, publicKey, secretPhrase, uncompressed) {
-            return decrypt(decryptBinaryData, data, nonce, publicKey, secretPhrase, uncompressed);
-        }
-        crypto_1.decryptBinary = decryptBinary;
-        function decrypt(decryptFunction, data, nonce, publicKey, secretPhrase, uncompressed) {
-            var privateKey = converters.hexStringToByteArray(getPrivateKey(secretPhrase));
-            var publicKeyBytes = converters.hexStringToByteArray(publicKey);
-            var sharedKey = getSharedKey(privateKey, publicKeyBytes);
-            var dataBytes = converters.hexStringToByteArray(data);
-            var options = {
-                privateKey: privateKey,
-                publicKey: publicKeyBytes,
-                nonce: converters.hexStringToByteArray(nonce),
-                sharedKey: sharedKey
-            };
-            try {
-                return decryptFunction(dataBytes, options, uncompressed);
-            }
-            catch (e) {
-                if (e instanceof RangeError || e == 'incorrect header check') {
-                    console.error('Managed Exception: ' + e);
-                    return decryptFunction(dataBytes, options, !uncompressed);
-                }
-                throw e;
-            }
-        }
-        function decryptData(data, options, uncompressed) {
-            var decrypted = aesDecrypt(data, options);
-            var binData = new Uint8Array(decrypted);
-            return converters.byteArrayToString(uncompressed ? binData : pako.inflate(binData));
-        }
-        function decryptBinaryData(data, options, uncompressed) {
-            var decrypted = aesDecrypt(data, options);
-            var binData = new Uint8Array(decrypted);
-            return uncompressed ? binData : pako.inflate(binData);
-        }
-        function aesDecrypt(ivCiphertext, options) {
-            if (ivCiphertext.length < 16 || ivCiphertext.length % 16 != 0) {
-                throw { name: "invalid ciphertext" };
-            }
-            var iv = converters.byteArrayToWordArray(ivCiphertext.slice(0, 16));
-            var ciphertext = converters.byteArrayToWordArray(ivCiphertext.slice(16));
-            var sharedKey = options.sharedKey.slice(0);
-            for (var i = 0; i < 32; i++) {
-                sharedKey[i] ^= options.nonce[i];
-            }
-            var key = CryptoJS.SHA256(converters.byteArrayToWordArray(sharedKey));
-            var encrypted = CryptoJS.lib.CipherParams.create({
-                ciphertext: ciphertext,
-                iv: iv,
-                key: key
-            });
-            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
-                iv: iv
-            });
-            var plaintext = converters.wordArrayToByteArray(decrypted);
-            return plaintext;
-        }
-        var PassphraseEncryptedMessage = (function () {
-            function PassphraseEncryptedMessage(ciphertext, salt, iv, HMAC) {
-                this.ciphertext = ciphertext;
-                this.salt = salt;
-                this.iv = iv;
-                this.HMAC = HMAC;
-            }
-            PassphraseEncryptedMessage.decode = function (encoded) {
-                var json = JSON.parse(encoded);
-                return new PassphraseEncryptedMessage(json[0], json[1], json[2], json[3]);
-            };
-            PassphraseEncryptedMessage.prototype.encode = function () {
-                return JSON.stringify([
-                    this.ciphertext,
-                    this.salt,
-                    this.iv,
-                    this.HMAC
-                ]);
-            };
-            return PassphraseEncryptedMessage;
-        }());
-        crypto_1.PassphraseEncryptedMessage = PassphraseEncryptedMessage;
-        function passphraseEncrypt(message, passphrase) {
-            var salt = CryptoJS.lib.WordArray.random(256 / 8);
-            var key = CryptoJS.PBKDF2(passphrase, salt, { iterations: 10, hasher: CryptoJS.algo.SHA256 });
-            var iv = CryptoJS.lib.WordArray.random(128 / 8);
-            var encrypted = CryptoJS.AES.encrypt(message, key, { iv: iv });
-            var ciphertext = CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
-            var salt_str = CryptoJS.enc.Hex.stringify(salt);
-            var iv_str = CryptoJS.enc.Hex.stringify(iv);
-            var key_str = CryptoJS.enc.Hex.stringify(key);
-            var HMAC = CryptoJS.HmacSHA256(ciphertext + iv_str, key_str);
-            var HMAC_str = CryptoJS.enc.Hex.stringify(HMAC);
-            return new PassphraseEncryptedMessage(ciphertext, salt_str, iv_str, HMAC_str);
-        }
-        crypto_1.passphraseEncrypt = passphraseEncrypt;
-        function passphraseDecrypt(cp, passphrase) {
-            var iv = CryptoJS.enc.Hex.parse(cp.iv);
-            var salt = CryptoJS.enc.Hex.parse(cp.salt);
-            var key = CryptoJS.PBKDF2(passphrase, salt, { iterations: 10, hasher: CryptoJS.algo.SHA256 });
-            var ciphertext = CryptoJS.enc.Base64.parse(cp.ciphertext);
-            var key_str = CryptoJS.enc.Hex.stringify(key);
-            var HMAC = CryptoJS.HmacSHA256(cp.ciphertext + cp.iv, key_str);
-            var HMAC_str = CryptoJS.enc.Hex.stringify(HMAC);
-            if (HMAC_str != cp.HMAC) {
-                return null;
-            }
-            var _cp = CryptoJS.lib.CipherParams.create({
-                ciphertext: ciphertext
-            });
-            var decrypted = CryptoJS.AES.decrypt(_cp, key, { iv: iv });
-            return decrypted.toString(CryptoJS.enc.Utf8);
-        }
-        crypto_1.passphraseDecrypt = passphraseDecrypt;
-    })(crypto = heat.crypto || (heat.crypto = {}));
-})(heat || (heat = {}));
-var heat;
-(function (heat) {
-    var easing;
-    (function (easing) {
-        function linear(t) { return t; }
-        easing.linear = linear;
-        function easeInQuad(t) { return t * t; }
-        easing.easeInQuad = easeInQuad;
-        function easeOutQuad(t) { return t * (2 - t); }
-        easing.easeOutQuad = easeOutQuad;
-        function easeInOutQuad(t) { return t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
-        easing.easeInOutQuad = easeInOutQuad;
-        function easeInCubic(t) { return t * t * t; }
-        easing.easeInCubic = easeInCubic;
-        function easeOutCubic(t) { return (--t) * t * t + 1; }
-        easing.easeOutCubic = easeOutCubic;
-        function easeInOutCubic(t) { return t < .5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1; }
-        easing.easeInOutCubic = easeInOutCubic;
-        function easeInQuart(t) { return t * t * t * t; }
-        easing.easeInQuart = easeInQuart;
-        function easeOutQuart(t) { return 1 - (--t) * t * t * t; }
-        easing.easeOutQuart = easeOutQuart;
-        function easeInOutQuart(t) { return t < .5 ? 8 * t * t * t * t : 1 - 8 * (--t) * t * t * t; }
-        easing.easeInOutQuart = easeInOutQuart;
-        function easeInQuint(t) { return t * t * t * t * t; }
-        easing.easeInQuint = easeInQuint;
-        function easeOutQuint(t) { return 1 + (--t) * t * t * t * t; }
-        easing.easeOutQuint = easeOutQuint;
-        function easeInOutQuint(t) { return t < .5 ? 16 * t * t * t * t * t : 1 + 16 * (--t) * t * t * t * t; }
-        easing.easeInOutQuint = easeInOutQuint;
-    })(easing = heat.easing || (heat.easing = {}));
-})(heat || (heat = {}));
-heat.Loader.directive('inputClear', function () {
-    return {
-        restrict: 'A',
-        compile: function (element, attrs) {
-            var color = attrs.inputClear;
-            var action = attrs.ngModel + " = ''";
-            element.after('<md-button aria-label="Close" class="animate-show md-icon-button md-accent"' +
-                'ng-show="' + attrs.ngModel + '" ng-click="' + action + '"' +
-                'style="position: absolute; top: 0px; right: -2px; margin-right:0px;">' +
-                '<md-icon style="color:black;font-size: 18px;" md-font-library="material-icons">close</md-icon>' +
-                '</md-button>');
-        }
-    };
-});
-var heat;
-(function (heat) {
-    var Iterator = (function () {
-        function Iterator(array) {
-            this.array = array;
-            this.cursor = 0;
-        }
-        Iterator.prototype.hasMore = function () {
-            return this.cursor < this.array.length;
-        };
-        Iterator.prototype.next = function () {
-            return this.array[this.cursor++];
-        };
-        Iterator.prototype.peek = function () {
-            return this.array[this.cursor];
-        };
-        return Iterator;
-    }());
-    heat.Iterator = Iterator;
-})(heat || (heat = {}));
-if (!Array.prototype['find']) {
-    Array.prototype['find'] = function (predicate) {
-        if (this === null) {
-            throw new TypeError('Array.prototype.find called on null or undefined');
-        }
-        if (typeof predicate !== 'function') {
-            throw new TypeError('predicate must be a function');
-        }
-        var list = Object(this);
-        var length = list.length >>> 0;
-        var thisArg = arguments[1];
-        var value;
-        for (var i = 0; i < length; i++) {
-            value = list[i];
-            if (predicate.call(thisArg, value, i, list)) {
-                return value;
-            }
-        }
-        return undefined;
-    };
-}
-if (!String.prototype['repeat']) {
-    String.prototype['repeat'] = function (count) {
-        'use strict';
-        if (this == null) {
-            throw new TypeError('can\'t convert ' + this + ' to object');
-        }
-        var str = '' + this;
-        count = +count;
-        if (count != count) {
-            count = 0;
-        }
-        if (count < 0) {
-            throw new RangeError('repeat count must be non-negative');
-        }
-        if (count == Infinity) {
-            throw new RangeError('repeat count must be less than infinity');
-        }
-        count = Math.floor(count);
-        if (str.length == 0 || count == 0) {
-            return '';
-        }
-        if (str.length * count >= 1 << 28) {
-            throw new RangeError('repeat count must not overflow maximum string size');
-        }
-        var rpt = '';
-        for (;;) {
-            if ((count & 1) == 1) {
-                rpt += str;
-            }
-            count >>>= 1;
-            if (count == 0) {
-                break;
-            }
-            str += str;
-        }
-        return rpt;
-    };
-}
-var utils;
-(function (utils) {
-    function unformat(commaFormatted) {
-        return commaFormatted ? commaFormatted.replace(/,/g, "") : "0";
+        });
     }
-    utils.unformat = unformat;
-    function commaFormat(amount) {
-        if (typeof amount == 'undefined') {
-            return '0';
-        }
-        amount = amount.replace(/,/g, '');
-        var neg = amount.indexOf('-') == 0;
-        if (neg) {
-            amount = amount.substr(1);
-        }
-        amount = amount.split('.');
-        var parts = amount[0].split("").reverse().join("").split(/(\d{3})/).reverse();
-        var format = [];
-        for (var i = 0; i < parts.length; i++) {
-            if (parts[i]) {
-                format.push(parts[i].split('').reverse().join(''));
-            }
-        }
-        return (neg ? '-' : '') + format.join(',') + (amount.length == 2 ? ('.' + amount[1]) : '');
-    }
-    utils.commaFormat = commaFormat;
-    function isNumber(value) {
-        var num = String(value).replace(/,/g, '');
-        if (num.match(/^\d+$/)) {
-            return true;
-        }
-        else if (num.match(/^\d+\.\d+$/)) {
-            return true;
-        }
-        return false;
-    }
-    utils.isNumber = isNumber;
-    function isHex(value) {
-        if (!angular.isString(value))
-            return false;
-        var s = value.startsWith("0x") ? value.substr(2) : value;
-        return (/^[0-9a-fA-F]+$/.test(s));
-    }
-    utils.isHex = isHex;
-    function isTimeWithinThreasholdLimit(inputTime) {
-        return ((inputTime * 1000) + 6 * 60 * 60 * 1000) > new Date().getTime();
-    }
-    utils.isTimeWithinThreasholdLimit = isTimeWithinThreasholdLimit;
-    function hasToManyDecimals(value, decimals) {
-        var num = String(value).replace(/,/g, '');
-        var parts = num.split(".");
-        if (parts[1]) {
-            var fractional = parts[1].replace(/[\s0]*$/g, "");
-            if (fractional.length > decimals)
-                return true;
-        }
-        return false;
-    }
-    utils.hasToManyDecimals = hasToManyDecimals;
-    function parseResponse(response) {
-        var parsed = {};
-        if (angular.isString(response)) {
-            try {
-                parsed = JSON.parse(response);
-            }
-            catch (e) {
-                parsed = { heatUtilParsingError: response || e.toString() };
-            }
-        }
-        else {
-            parsed = response;
-        }
-        return parsed;
-    }
-    utils.parseResponse = parseResponse;
-    function ardorTimestampToDate(timestamp) {
-        return new Date(Date.UTC(2018, 0, 1, 0, 0, 0, 0) + timestamp * 1000);
-    }
-    utils.ardorTimestampToDate = ardorTimestampToDate;
-    function nemTimestampToDate(timestamp) {
-        return new Date(Date.UTC(2015, 2, 29, 0, 5, 36, 25) + timestamp * 1000);
-    }
-    utils.nemTimestampToDate = nemTimestampToDate;
-    var BASE_DATE;
-    function isBaseDate() {
-        return !!BASE_DATE;
-    }
-    utils.isBaseDate = isBaseDate;
-    function setBaseTimestamp(timestamp) {
-        BASE_DATE = timestamp;
-    }
-    utils.setBaseTimestamp = setBaseTimestamp;
-    function timestampToDate(timestamp) {
-        return new Date(BASE_DATE + timestamp * 1000);
-    }
-    utils.timestampToDate = timestampToDate;
-    function epochTime(timestamp) {
-        var t = timestamp ? timestamp : Date.now();
-        return (t - BASE_DATE + 500) / 1000;
-    }
-    utils.epochTime = epochTime;
-    function isAssetExpired(assetExpiration) {
-        return assetExpiration ? assetExpiration <= epochTime() : false;
-    }
-    utils.isAssetExpired = isAssetExpired;
-    function roundTo(value, decimals) {
-        return String(parseFloat(value).toFixed(decimals));
-    }
-    utils.roundTo = roundTo;
-    function delayPromise(promise, delay) {
+    dialogs.assetInfo = assetInfo;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function blockDetails($event, blockId) {
         var $q = heat.$inject.get('$q');
+        var heatApi = heat.$inject.get('heat');
         var deferred = $q.defer();
-        var result, resolved = false, rejected = false;
-        var timeout = setTimeout(function () {
-            timeout = null;
-            if (resolved) {
-                deferred.resolve(result);
-            }
-            else if (rejected) {
-                deferred.reject(result);
-            }
-        }, delay);
-        promise.then(function (r) {
-            result = r;
-            resolved = true;
-            if (timeout === null) {
-                deferred.resolve(r);
-            }
-        }, function (r) {
-            result = r;
-            rejected = true;
-            if (timeout === null) {
-                deferred.reject(r);
-            }
+        heatApi.api.getBlock(blockId, true).then(function (response) {
+            var sumofamounts = new Big("0");
+            response.transactions.forEach(function (transaction) {
+                sumofamounts = sumofamounts.add(new Big(transaction.amount));
+            });
+            dialogs.dialog({
+                id: 'blockDetails',
+                title: 'Block details',
+                targetEvent: $event,
+                cancelButton: false,
+                locals: {
+                    blockId: blockId,
+                    height: response.height,
+                    baseTarget: response.baseTarget,
+                    numberOfTransactions: response.numberOfTransactions,
+                    generator: response.generator,
+                    posRewardHQT: response.posRewardHQT,
+                    popRewardHQT: response.popRewardHQT,
+                    sumofamounts: utils.commaFormat(utils.formatQNT(sumofamounts.toString(), 8)) + ' HEAT',
+                    transactions: response.transactions,
+                    showTransactionDetails: function ($event, transaction) {
+                        dialogs.transactionDetails($event, transaction);
+                    }
+                },
+                style: "\n         .dialog-block-details td {\n            padding: 8px;\n         }\n         .dialog-block-details ul {\n            list-style-type: none;\n            padding-left: 0px;\n            margin-left: 0px;\n         }\n         .dialog-block-details ul li {\n            padding-bottom: 5px;\n         }\n         .dialog-block-details .link-block {\n            cursor: pointer;\n            color: #3b5998;\n            text-decoration: underline;\n          }\n        ",
+                template: "\n           <div layout=\"column\" class=\"dialog-block-details\">\n             <table>\n               <tr><td>Block id</td><td>{{vm.blockId}}</td></tr>\n               <tr><td>Block height</td><td>{{vm.height}}</td></tr>\n               <tr><td>Base target</td><td>{{vm.baseTarget}}</td></tr>\n               <tr><td>Number of transactions</td><td>{{vm.numberOfTransactions}}</td></tr>\n               <tr><td>Generator</td><td>{{vm.generator}}</td></tr>\n               <tr><td>POS reward</td><td>{{vm.posRewardHQT}}</td></tr>\n               <tr><td>POP reward</td><td>{{vm.popRewardHQT}}</td></tr>\n               <tr><td>Total HEAT transferred</td><td>{{vm.sumofamounts}}</td></tr>\n               <tr ng-if=\"vm.transactions.length\"><td>Transactions</td>\n                <td>\n                  <ul>\n                    <li ng-repeat=\"trans in vm.transactions\" ng-click=\"vm.showTransactionDetails($event, trans)\" class=\"link-block\">{{trans.transaction}}</li>\n                  </ul>\n                </td>\n               </tr>\n             </table>\n           </div>\n         "
+            }).then(deferred.resolve, deferred.reject);
         });
         return deferred.promise;
     }
-    utils.delayPromise = delayPromise;
-    var timeoutError = new Error("promise time is up");
-    function timeoutPromise(promise, time) {
-        var timer;
-        return Promise.race([
-            promise,
-            new Promise(function (resolve, reject) { return timer = setTimeout(reject, time, timeoutError); })
-        ]).finally(function () { return clearTimeout(timer); });
-    }
-    utils.timeoutPromise = timeoutPromise;
-    function convertToNQT(amountNXT) {
-        if (typeof amountNXT == 'undefined') {
-            return '0';
-        }
-        amountNXT = String(amountNXT).replace(/,/g, '');
-        var parts = amountNXT.split(".");
-        var amount = parts[0];
-        if (parts.length == 1) {
-            var fraction;
-            fraction = "00000000";
-        }
-        else if (parts.length == 2) {
-            if (parts[1].length <= 8) {
-                var fraction = parts[1];
-            }
-            else {
-                var fraction = parts[1].substring(0, 8);
-            }
-        }
-        else {
-            throw "Invalid input";
-        }
-        for (var i = fraction.length; i < 8; i++) {
-            fraction += "0";
-        }
-        var result = amount + "" + fraction;
-        if (!/^\d+$/.test(result)) {
-            throw "Invalid input.";
-        }
-        result = result.replace(/^0+/, "");
-        if (result === "") {
-            result = "0";
-        }
-        return result;
-    }
-    utils.convertToNQT = convertToNQT;
-    function formatQNT(quantity, decimals, returnNullZero) {
-        var asfloat = utils.convertToQNTf(quantity);
-        var cf = utils.commaFormat(asfloat);
-        var parts = cf.split('.');
-        var result;
-        if (!parts[1]) {
-            result = parts[0] + (decimals > 0 ? "." + "0".repeat(decimals) : "");
-        }
-        else if (parts[1].length > decimals) {
-            var i = parts[1].length - 1;
-            while (parts[1].length > decimals) {
-                if (parts[1][i] == "0") {
-                    parts[1] = parts[i].slice(0, -1);
-                    i--;
-                    continue;
+    dialogs.blockDetails = blockDetails;
+})(dialogs || (dialogs = {}));
+var QRCode;
+var dialogs;
+(function (dialogs) {
+    function depositAsset($event, assetInfo) {
+        var http = heat.$inject.get('http');
+        var user = heat.$inject.get('user');
+        var $q = heat.$inject.get('$q');
+        var clipboard = heat.$inject.get('clipboard');
+        var localKeyStore = heat.$inject.get('localKeyStore');
+        var env = heat.$inject.get('env');
+        var account = user.account, publicKey = user.publicKey;
+        var noteOne = "Deposit address is associated with account HEAT ".concat(account, " and public key ").concat(publicKey);
+        var url = "https://heatwallet.com/getaddr.cgi?heataccount=".concat(account, "&publickey=").concat(publicKey, "&aid=").concat(assetInfo.id);
+        var deferred = $q.defer();
+        http.get(url).then(function (response) {
+            var parsed = angular.isString(response) ? JSON.parse(response) : response;
+            dialogs.dialog({
+                id: 'depositAsset',
+                title: "Deposit ".concat(assetInfo.symbol),
+                targetEvent: $event,
+                okButton: true,
+                style: "\n          .qrcodeBox {\n            margin:10px;\n          }\n        ",
+                template: "\n          <div>\n            <p>{{vm.symbol}} Deposit address <b id=\"deposit-dialog-btc-address-element\">{{vm.address}}</b>&nbsp;<a ng-click=\"vm.copyAddress()\">[copy]</a></p>\n            <p>{{vm.noteOne}}</p>\n            <p><div class=\"qrcodeBox\" id=\"depositeAddressQRCode\"></div></p>\n            <p></p>\n            <p>\n              <div ng-bind-html=\"vm.dialogue\"></div>\n            </p>\n          </div>\n        ",
+                locals: {
+                    noteOne: noteOne,
+                    dialogue: parsed.deposit.dialogue,
+                    isBtc: parsed.deposit.dialogue.includes('5592059897546023466'),
+                    address: parsed.deposit.address,
+                    shorQR: function () {
+                        showQrCodeOnDialogLoad(parsed.deposit.address);
+                    }(),
+                    copyAddress: function () {
+                        clipboard.copyWithUI(document.getElementById('deposit-dialog-btc-address-element'), 'Copied address to clipboard');
+                    },
+                    symbol: assetInfo.symbol
                 }
-                break;
-            }
-            result = parts[0] + "." + parts[1];
-        }
-        else {
-            result = parts[0] + "." + parts[1] + "0".repeat(decimals - parts[1].length);
-        }
-        return returnNullZero && !result.match(/[^0\.]/) ? null : result;
+            }).then(deferred.resolve, deferred.reject);
+        });
+        return deferred.promise;
     }
-    utils.formatQNT = formatQNT;
-    function formatBytes(bytes, decimals) {
-        if (decimals === void 0) { decimals = 2; }
-        if (!+bytes)
-            return '0 Bytes';
-        var k = 1024;
-        var dm = decimals < 0 ? 0 : decimals;
-        var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-        var i = Math.floor(Math.log(bytes) / Math.log(k));
-        return "".concat(parseFloat((bytes / Math.pow(k, i)).toFixed(dm)), " ").concat(sizes[i]);
+    dialogs.depositAsset = depositAsset;
+    function showQrCodeOnDialogLoad(data) {
+        setTimeout(function () {
+            new QRCode("depositeAddressQRCode", {
+                text: data,
+                width: 128,
+                height: 128,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }, 1000);
     }
-    utils.formatBytes = formatBytes;
-    function formatERC20TokenAmount(amount, decimals, fixed) {
-        if (decimals == 0)
-            return amount;
-        var s = amount.padStart(amount.length > decimals ? decimals : decimals + 1, "0");
-        var decimalPos = s.length - decimals;
-        var decimalPart = s.substr(decimalPos, s.length);
-        if (!fixed) {
-            var tailZeroCount = 0;
-            for (var i = decimalPart.length - 1; i >= 0; i--) {
-                if (decimalPart[i] == "0") {
-                    tailZeroCount++;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function showEtherDepositDialog($event, address) {
+        var clipboard = heat.$inject.get('clipboard');
+        return dialogs.dialog({
+            id: 'showEtherDepositDialog',
+            title: "Deposit Ether",
+            targetEvent: $event,
+            cancelButton: false,
+            okButton: true,
+            locals: {
+                userEtherWalletAddress: address,
+                copyAddress: function () {
+                    clipboard.copyWithUI(document.getElementById('deposit-dialog-eth-address-element'), 'Copied address to clipboard');
                 }
-                else {
-                    break;
-                }
-            }
-            decimalPart = decimalPart.substr(0, decimalPart.length - tailZeroCount);
-        }
-        var integerPart = utils.commaFormat(s.substr(0, decimalPos) || "0");
-        return integerPart + (decimalPart ? numberSeparator.decimal + decimalPart : "");
-    }
-    utils.formatERC20TokenAmount = formatERC20TokenAmount;
-    var numberSeparator = { decimal: getSeparator("decimal", "EN-en"), group: getSeparator("group", "EN-en") };
-    function getSeparator(separatorType, locale) {
-        var numberWithGroupAndDecimalSeparator = 1000.1;
-        return Intl.NumberFormat(locale)
-            .formatToParts(numberWithGroupAndDecimalSeparator)
-            .find(function (part) { return part.type === separatorType; })
-            .value;
-    }
-    function trimDecimals(formatted, decimals) {
-        var parts = formatted.split(".");
-        if (!parts[1])
-            parts[1] = "0".repeat(decimals);
-        else
-            parts[1] = parts[1].substr(0, decimals);
-        if (parts[1].length < decimals)
-            parts[1] += "0".repeat(decimals - parts[1].length);
-        return parts[0] + "." + parts[1];
-    }
-    utils.trimDecimals = trimDecimals;
-    function convertToQNTf(quantity, decimals) {
-        if (decimals === void 0) { decimals = 8; }
-        if (typeof quantity == 'undefined')
-            return '0';
-        if (typeof quantity == 'number')
-            quantity = "" + quantity;
-        if (quantity.length < decimals) {
-            for (var i = quantity.length; i < decimals; i++) {
-                quantity = "0" + quantity;
-            }
-        }
-        var afterComma = "";
-        if (decimals) {
-            afterComma = "." + quantity.substring(quantity.length - decimals);
-            quantity = quantity.substring(0, quantity.length - decimals);
-            if (!quantity) {
-                quantity = "0";
-            }
-            afterComma = afterComma.replace(/0+$/, "");
-            if (afterComma == ".") {
-                afterComma = "";
-            }
-        }
-        return quantity + afterComma;
-    }
-    utils.convertToQNTf = convertToQNTf;
-    var DIVIDER_100_MILIONS = new Big(100000000);
-    function calculateTotalOrderPriceQNT(quantityQNT, priceQNT) {
-        return new Big(quantityQNT).times(new Big(priceQNT).div(DIVIDER_100_MILIONS)).round().toString();
-    }
-    utils.calculateTotalOrderPriceQNT = calculateTotalOrderPriceQNT;
-    var ConvertToQNTError = (function () {
-        function ConvertToQNTError(message, code) {
-            this.message = message;
-            this.code = code;
-            this.name = "ConvertToQNTError";
-        }
-        return ConvertToQNTError;
-    }());
-    utils.ConvertToQNTError = ConvertToQNTError;
-    var ALL_ASSETS_DECIMALS = 8;
-    function convertToQNT(quantity, decimals) {
-        if (decimals === void 0) { decimals = 8; }
-        var parts = quantity.split(".");
-        var qnt = parts[0];
-        if (parts.length == 1) {
-            for (var i = 0; i < ALL_ASSETS_DECIMALS; i++) {
-                qnt += "0";
-            }
-        }
-        else if (parts.length == 2) {
-            var fraction = parts[1];
-            if (fraction.length > ALL_ASSETS_DECIMALS) {
-                throw new ConvertToQNTError("Fraction can only have " + ALL_ASSETS_DECIMALS + " decimals max.", 1);
-            }
-            else if (fraction.length < ALL_ASSETS_DECIMALS) {
-                for (var i = fraction.length; i < ALL_ASSETS_DECIMALS; i++) {
-                    fraction += "0";
-                }
-            }
-            qnt += fraction;
-        }
-        else {
-            throw new ConvertToQNTError("Incorrect input", 2);
-        }
-        if (!/^\d+$/.test(qnt)) {
-            throw new ConvertToQNTError("Invalid input. Only numbers and a dot are accepted.", 3);
-        }
-        var result = qnt.replace(/^0+/, "");
-        var lastZeros = ALL_ASSETS_DECIMALS - decimals;
-        return result.length > lastZeros
-            ? result.substr(0, result.length - lastZeros) + '0'.repeat(lastZeros)
-            : result;
-    }
-    utils.convertToQNT = convertToQNT;
-    function getByteLen(value) {
-        var byteLen = 0;
-        for (var i = 0; i < value.length; i++) {
-            var c = value.charCodeAt(i);
-            byteLen += c < (1 << 7) ? 1 :
-                c < (1 << 11) ? 2 :
-                    c < (1 << 16) ? 3 :
-                        c < (1 << 21) ? 4 :
-                            c < (1 << 26) ? 5 :
-                                c < (1 << 31) ? 6 : Number.NaN;
-        }
-        return byteLen;
-    }
-    utils.getByteLen = getByteLen;
-    function debounce(func, wait, immediate) {
-        var timeout;
-        return function () {
-            var context = this, args = arguments;
-            var later = function () {
-                timeout = null;
-                if (!immediate)
-                    func.apply(context, args);
-            };
-            var callNow = immediate && !timeout;
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait || 100);
-            if (callNow)
-                func.apply(context, args);
-        };
-    }
-    utils.debounce = debounce;
-    ;
-    function repeatWhile(delay, cb) {
-        var fn = function () {
-            if (cb()) {
-                clearInterval(interval);
-            }
-        };
-        var interval = setInterval(fn, delay);
-    }
-    utils.repeatWhile = repeatWhile;
-    function emptyToNull(input) {
-        return (angular.isString(input) && input.trim().length == 0) ? null : input;
-    }
-    utils.emptyToNull = emptyToNull;
-    function uuidv4() {
-        return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
-            return (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16);
+            },
+            template: "\n        <div layout=\"column\" flex>\n          Deposit the desired amount of Ether(ETH) to your Ethereum Address\n          <b id=\"deposit-dialog-eth-address-element\"> {{vm.userEtherWalletAddress}} </b>&nbsp;\n          <a ng-click=\"vm.copyAddress()\">[copy]</a>&nbsp;\n        </div>\n      "
         });
     }
-    utils.uuidv4 = uuidv4;
-    utils.helper = {
-        useLocalServer: function () {
-            heat.$inject.get('heat').switchToServer({ way: "local", failoverEnabled: false, sameMessagingHost: false });
-        },
-        useRemoteServer: function (serverDescriptor) {
-            heat.$inject.get('heat').switchToServer({ way: "remote", failoverEnabled: true, sameMessagingHost: false }, serverDescriptor);
-        },
+    dialogs.showEtherDepositDialog = showEtherDepositDialog;
+})(dialogs || (dialogs = {}));
+heat.Loader.directive('autoFocus', function ($timeout) {
+    'use strict';
+    return {
+        restrict: 'A',
+        link: function (_scope, _element) {
+            $timeout(function () {
+                _element[0].focus();
+            }, 500);
+        }
     };
-})(utils || (utils = {}));
+});
+var dialogs;
+(function (dialogs) {
+    function $mdDialog() {
+        return heat.$inject.get('$mdDialog');
+    }
+    dialogs.$mdDialog = $mdDialog;
+    function dialog(options) {
+        if (angular.isString(options.style)) {
+            var styleId = 'dialog-style-' + options.id;
+            if (!document.getElementById(styleId)) {
+                angular.element(document).find('head').append("<style type=\"text/css\" id=\"".concat(styleId, "\">").concat(options.style, "</style>"));
+            }
+        }
+        return dialogs.$mdDialog().show({
+            controller: options.controller || function () { },
+            locals: angular.extend({
+                isBetanet: heat.isBetanet,
+                title: options.title,
+                okButton: angular.isDefined(options.okButton) ? options.okButton : true,
+                cancelButton: options.cancelButton,
+                $mdDialog: dialogs.$mdDialog()
+            }, options.locals || {}),
+            controllerAs: 'vm',
+            bindToController: true,
+            parent: angular.element(document.body),
+            targetEvent: options.targetEvent,
+            template: "\n      <md-dialog>\n        <md-toolbar ng-if=\"vm.isBetanet\" style=\"background-color: #bf112f !important\">\n          <div class=\"md-toolbar-tools\">\n            <h2>B E T A N E T</h2>\n          </div>\n        </md-toolbar>\n        <form name=\"dialogForm\">\n          <md-toolbar>\n            <div class=\"md-toolbar-tools\"><h2>{{vm.title}}</h2></div>\n          </md-toolbar>\n          <md-dialog-content style=\"min-width:500px;max-width:650px\" layout=\"column\" layout-padding>\n            <div flex layout=\"column\">\n              ".concat(options.template, "\n            </div>\n          </md-dialog-content>\n          <md-dialog-actions layout=\"row\">\n            <span flex></span>\n            <md-button ng-if=\"vm.cancelButton\" class=\"md-warn\" ng-click=\"vm.cancelButtonClick ? vm.cancelButtonClick() : vm.$mdDialog.cancel()\" aria-label=\"Cancel\">Cancel</md-button>\n            <md-button type=\"submit\" ng-disabled=\"dialogForm.$invalid\" ng-if=\"vm.okButton\" class=\"md-primary\"\n              ng-click=\"vm.okButtonClick ? vm.okButtonClick() : vm.$mdDialog.hide()\" aria-label=\"OK\">{{vm.okButtonLabel?vm.okButtonLabel:'OK'}}</md-button>\n          </md-dialog-actions>\n        </form>\n      </md-dialog>\n      ")
+        });
+    }
+    dialogs.dialog = dialog;
+    function wizard(options) {
+        if (angular.isString(options.style)) {
+            var styleId = 'wizard-style-' + options.id;
+            if (!document.getElementById(styleId)) {
+                angular.element(document).find('head').append("<style type=\"text/css\" id=\"".concat(styleId, "\">").concat(options.style, "</style>"));
+            }
+        }
+        return dialogs.$mdDialog().show({
+            controller: options.controller || function () { },
+            locals: angular.extend({
+                title: options.title,
+                cancelButton: options.cancelButton,
+                $mdDialog: dialogs.$mdDialog(),
+                pages: options.pages,
+                wizardIndex: 0,
+                goToNextPage: function () {
+                    this.wizardIndex++;
+                    if (angular.isFunction(this.pages[this.wizardIndex].show)) {
+                        this.pages[this.wizardIndex].show(this, this.wizardIndex - 1);
+                    }
+                },
+                goToPreviousPage: function () {
+                    this.wizardIndex--;
+                    if (angular.isFunction(this.pages[this.wizardIndex].show)) {
+                        this.pages[this.wizardIndex].show(this, this.wizardIndex + 1);
+                    }
+                }
+            }, options.locals || {}),
+            controllerAs: 'vm',
+            bindToController: true,
+            parent: angular.element(document.body),
+            targetEvent: options.targetEvent,
+            template: "\n      <md-dialog>\n        <form name=\"dialogForm\">\n          <md-toolbar>\n            <div class=\"md-toolbar-tools\"><h2>{{vm.title}}<span ng-show=\"vm.pages[vm.wizardIndex].title\">{{vm.pages[vm.wizardIndex].title}}</span></h2></div>\n          </md-toolbar>\n          <md-dialog-content style=\"min-width:500px;max-width:600px\" layout=\"column\" layout-padding>\n            <div flex layout=\"column\">\n              ".concat(options.pages.map(function (page, index) {
+                return "<div flex layout=\"column\" ng-if=\"vm.wizardIndex==".concat(index, "\">") +
+                    page.template +
+                    '</div>';
+            }).join(''), "\n            </div>\n          </md-dialog-content>\n          <md-dialog-actions layout=\"row\">\n            <md-button ng-show=\"!vm.hideCancelBtn\"\n                ng-click=\"vm.cancelButtonClick ? vm.cancelButtonClick() : vm.$mdDialog.cancel()\" aria-label=\"Cancel\">Cancel</md-button>\n            <span flex></span>\n            <md-button ng-click=\"vm.goToPreviousPage()\"\n                ng-show=\"vm.wizardIndex>0 && !vm.hideBackBtn\" aria-label=\"Back\">Back</md-button>\n            <md-button ng-disabled=\"dialogForm.$invalid\"\n                ng-show=\"vm.wizardIndex < (vm.pages.length-1)\"\n                ng-click=\"vm.goToNextPage()\" aria-label=\"Continue\">{{vm.pages[vm.wizardIndex].continueBtnLabel||'Continue'}}</md-button>\n            <md-button ng-disabled=\"dialogForm.$invalid\"\n                ng-show=\"vm.wizardIndex == (vm.pages.length-1) && !vm.hideOkBtn\"\n                ng-click=\"vm.okButtonClick ? vm.okButtonClick() : vm.$mdDialog.hide()\" aria-label=\"Ok\">{{vm.pages[vm.wizardIndex].okBtnLabel||'Ok'}}</md-button>\n          </md-dialog-actions>\n        </form>\n      </md-dialog>\n      ")
+        });
+    }
+    dialogs.wizard = wizard;
+    function confirm(title, content, mdDialog) {
+        if (mdDialog) {
+            mdDialog($mdDialog());
+        }
+        return dialogs.dialog({
+            id: 'confirmDialog',
+            title: title,
+            okButton: true,
+            cancelButton: true,
+            locals: {
+                content: content
+            },
+            template: "\n        <!--<md-input-container flex>-->\n        <p ng-bind-html=\"vm.content\"></p>\n        <!--</md-input-container>-->\n      "
+        });
+    }
+    dialogs.confirm = confirm;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function download($event, account) {
+        var $q = heat.$inject.get('$q');
+        var heatApi = heat.$inject.get('heat');
+        var $timeout = heat.$inject.get('$timeout');
+        var $rootScope = heat.$inject.get('$rootScope');
+        var settings = heat.$inject.get('settings');
+        var assetInfo = heat.$inject.get('assetInfo');
+        var format = settings.get(SettingsService.DATEFORMAT_DEFAULT);
+        var locals = {
+            transactions: {
+                total: 0,
+                array: [],
+                percent: 0,
+                done: false
+            },
+            trades: {
+                total: 0,
+                array: [],
+                percent: 0,
+                done: false
+            },
+            currencies: [],
+            symbols: {}
+        };
+        heatApi.api.getTransactionsForAccountCount(account).then(function (count) {
+            var scopes = [];
+            for (var i = 0; i < count; i += 100) {
+                scopes.push([i, i + 99]);
+            }
+            $rootScope.$evalAsync(function () {
+                locals.transactions.total = count;
+            });
+            recursiveGetTransactions(account, scopes, function (transaction) {
+                $rootScope.$evalAsync(function () {
+                    if (transaction == null) {
+                        locals.transactions.percent = 100;
+                        locals.transactions.done = true;
+                        done();
+                    }
+                    else {
+                        locals.transactions.array.push(transaction);
+                        locals.transactions.percent = Math.round(locals.transactions.array.length / (locals.transactions.total / 100));
+                    }
+                });
+            });
+        });
+        heatApi.api.getAllAccountTradesCount(account).then(function (count) {
+            var scopes = [];
+            for (var i = 0; i < count; i += 100) {
+                scopes.push([i, i + 99]);
+            }
+            $rootScope.$evalAsync(function () {
+                locals.trades.total = count;
+            });
+            recursiveGetTrades(account, scopes, function (trade) {
+                $rootScope.$evalAsync(function () {
+                    if (trade == null) {
+                        locals.trades.percent = 100;
+                        locals.trades.done = true;
+                        done();
+                    }
+                    else {
+                        locals.trades.array.push(trade);
+                        locals.trades.percent = Math.round(locals.trades.array.length / (locals.trades.total / 100));
+                    }
+                });
+            });
+        });
+        function done() {
+            if (locals.transactions.done && locals.trades.done) {
+                console.log('duplicates', collectDuplicates(locals.transactions.array));
+                var assets_1 = collectAssets(locals.transactions.array, locals.trades.array);
+                getAssetSymbols(assets_1).then(function (symbols) {
+                    $rootScope.$evalAsync(function () {
+                        assets_1.forEach(function (asset) {
+                            var symbol = symbols[asset].symbol;
+                            locals.currencies.push({
+                                id: asset,
+                                symbol: symbol,
+                                download: createDownloadFunction(asset, symbol)
+                            });
+                            locals.symbols[asset] = symbol;
+                        });
+                    });
+                });
+            }
+        }
+        function createDownloadFunction(currency, symbol) {
+            return function () {
+                var entries = [];
+                locals.transactions.array.forEach(function (t) {
+                    if (filterTransaction(currency, t))
+                        entries.push(transactionToHistory(currency, t));
+                });
+                locals.trades.array.forEach(function (t) {
+                    if (filterTrade(currency, t))
+                        entries.push(tradeToHistory(currency, t));
+                });
+                entries.sort(function (a, b) { return a.timestamp - b.timestamp; });
+                var csv = historyToCSV(entries);
+                download(csv, account + '.' + symbol + '.csv');
+            };
+        }
+        function collectAssets(transactions, trades) {
+            var assets = { "0": 1 };
+            transactions.forEach(function (transaction) {
+                var type = transaction.type, subType = transaction.subtype;
+                if (type == 2 && subType == 4 || type == 2 && subType == 3) {
+                    assets[transaction.attachment.asset] = 1;
+                    assets[transaction.attachment.currency] = 1;
+                }
+                if (type == 2 && subType == 2) {
+                    assets[transaction.attachment.asset] = 1;
+                }
+            });
+            trades.forEach(function (trade) {
+                assets[trade.asset] = 1;
+                assets[trade.currency] = 1;
+            });
+            return Object.getOwnPropertyNames(assets);
+        }
+        function collectDuplicates(transactions) {
+            var dups = {};
+            transactions.forEach(function (transaction) {
+                if (typeof dups[transaction.transaction] == "number") {
+                    dups[transaction.transaction]++;
+                }
+                else {
+                    dups[transaction.transaction] = 1;
+                }
+            });
+            var collect = {};
+            Object.getOwnPropertyNames(dups).forEach(function (name) {
+                if (dups[name] > 1) {
+                    collect[name] = dups[name];
+                }
+            });
+            return collect;
+        }
+        function getAssetSymbols(assets) {
+            var promises = [];
+            var data = {};
+            assets.forEach(function (asset) {
+                promises.push(assetInfo.getInfo(asset).then(function (info) {
+                    data[asset] = info;
+                }));
+            });
+            return Promise.all(promises).then(function () { return data; });
+        }
+        function filterTransaction($currency, transaction) {
+            if ($currency == "0")
+                return true;
+            var type = transaction.type, subType = transaction.subtype;
+            if (type == 2 && subType == 4 || type == 2 && subType == 3) {
+                return transaction.attachment.asset == $currency || transaction.attachment.currency == $currency;
+            }
+            if (type == 2 && subType == 2) {
+                return transaction.attachment.asset == $currency;
+            }
+        }
+        function filterTrade($currency, trade) {
+            return trade.currency == $currency || trade.asset == $currency;
+        }
+        function recursiveGetTransactions(account, scopes, reporter) {
+            var scope = scopes.shift();
+            if (!scope) {
+                reporter(null);
+                return;
+            }
+            var deferred = $q.defer();
+            heatApi.api.getTransactionsForAccount(account, scope[0], scope[1]).then(function (transactions) {
+                transactions.forEach(function (transaction) {
+                    reporter(transaction);
+                });
+                $timeout(function () {
+                    recursiveGetTransactions(account, scopes, reporter);
+                });
+            }).catch(deferred.reject);
+            return deferred.promise;
+        }
+        function recursiveGetTrades(account, scopes, reporter) {
+            var scope = scopes.shift();
+            if (!scope) {
+                reporter(null);
+                return;
+            }
+            var deferred = $q.defer();
+            heatApi.api.getAllAccountTrades(account, "0", 0, scope[0], scope[1]).then(function (trades) {
+                trades.forEach(function (trade) {
+                    reporter(trade);
+                });
+                $timeout(function () {
+                    recursiveGetTrades(account, scopes, reporter);
+                });
+            }).catch(deferred.reject);
+            return deferred.promise;
+        }
+        function transactionToHistory($currency, transaction) {
+            var entry = {}, type = transaction.type, subType = transaction.subtype;
+            entry.timestamp = transaction.timestamp;
+            entry.ID = transaction.transaction;
+            entry.TIME = dateFormat(utils.timestampToDate(transaction.timestamp), format);
+            entry.TYPE = encodeTxType(type, subType);
+            if (transaction.sender == account)
+                entry.FEE = utils.formatQNT(transaction.fee, 8);
+            else
+                entry.FEE = "0";
+            entry.MESSAGE = heatApi.getHeatMessageContents(transaction);
+            entry.ACCOUNT = transaction.sender == account ? transaction.recipient : transaction.sender;
+            entry.AMOUNT = '0';
+            entry.ASSET = '';
+            entry.PRICE = '';
+            entry.TOTAL = '';
+            if (type == 2 && subType == 4) {
+                var total = utils.calculateTotalOrderPriceQNT(transaction.attachment.quantity, transaction.attachment.price);
+                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
+                entry.TOTAL = utils.formatQNT(total, 8);
+                entry.ASSET = transaction.attachment.asset == $currency ? transaction.attachment.asset : transaction.attachment.currency;
+                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
+            }
+            else if (type == 2 && subType == 3) {
+                var total = utils.calculateTotalOrderPriceQNT(transaction.attachment.quantity, transaction.attachment.price);
+                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
+                entry.TOTAL = utils.formatQNT(total, 8);
+                entry.ASSET = transaction.attachment.asset == $currency ? transaction.attachment.asset : transaction.attachment.currency;
+                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
+            }
+            else if (type == 1 && subType == 0) {
+            }
+            else if (type == 0 && subType == 0) {
+                entry.ASSET = "0";
+                entry.ASSET_SYMBOL = "HEAT";
+                if (transaction.sender == transaction.recipient)
+                    entry.AMOUNT = "0";
+                else if (transaction.recipient == account)
+                    entry.AMOUNT = utils.formatQNT(transaction.amount, 8);
+                else
+                    entry.AMOUNT = "-" + utils.formatQNT(transaction.amount, 8);
+            }
+            else if (type == 2 && subType == 2) {
+                entry.ASSET = transaction.attachment.asset;
+                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
+                if (transaction.sender == transaction.recipient)
+                    entry.AMOUNT = "0";
+                else if (transaction.recipient == account)
+                    entry.AMOUNT = utils.formatQNT(transaction.attachment.quantity, 8);
+                else
+                    entry.AMOUNT = "-" + utils.formatQNT(transaction.attachment.quantity, 8);
+            }
+            else if (type == 2 && subType == 6) {
+                var quantity = transaction.attachment.cancelledOrderQuantity || "0";
+                var price = transaction.attachment.cancelledOrderPrice || "0";
+                var total = quantity != "0" && price != "0" ? utils.calculateTotalOrderPriceQNT(quantity, price) : "0";
+                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
+                entry.TOTAL = utils.formatQNT(total, 8);
+                entry.ASSET = transaction.attachment.cancelledOrderAsset ? (transaction.attachment.cancelledOrderAsset == $currency ? transaction.attachment.asset : transaction.attachment.currency) : '';
+                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
+            }
+            else if (type == 2 && subType == 5) {
+                var quantity = transaction.attachment.cancelledOrderQuantity || "0";
+                var price = transaction.attachment.cancelledOrderPrice || "0";
+                var total = quantity != "0" && price != "0" ? utils.calculateTotalOrderPriceQNT(quantity, price) : "0";
+                entry.PRICE = utils.formatQNT(transaction.attachment.price, 8);
+                entry.TOTAL = utils.formatQNT(total, 8);
+                entry.ASSET = transaction.attachment.cancelledOrderAsset ? (transaction.attachment.cancelledOrderAsset == $currency ? transaction.attachment.asset : transaction.attachment.currency) : '';
+                entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
+            }
+            else if (type == 4 && subType == 0) {
+            }
+            else if (type == 2 && subType == 0) {
+                if (transaction.transaction == $currency) {
+                    entry.AMOUNT = utils.formatQNT(transaction.attachment.quantity, 8);
+                }
+            }
+            return entry;
+        }
+        function tradeToHistory($currency, trade) {
+            var entry = {};
+            entry.timestamp = trade.timestamp;
+            entry.ID = trade.askOrder + "." + trade.bidOrder;
+            entry.TYPE = 'Trade';
+            entry.TIME = dateFormat(utils.timestampToDate(trade.timestamp), format);
+            entry.ACCOUNT = trade.seller == account ? trade.buyer : trade.seller;
+            entry.FEE = "0";
+            entry.MESSAGE = '';
+            entry.PRICE = '';
+            entry.TOTAL = '';
+            entry.ASSET = $currency;
+            entry.ASSET_SYMBOL = locals.symbols[entry.ASSET];
+            if (trade.seller == account && trade.buyer == account) {
+                entry.AMOUNT = '0';
+            }
+            else {
+                var total = utils.calculateTotalOrderPriceQNT(trade.quantity, trade.price);
+                entry.PRICE = utils.formatQNT(trade.price, 8);
+                entry.TOTAL = utils.formatQNT(total, 8);
+                if (trade.currency == $currency) {
+                    if (trade.buyer == account) {
+                        entry.AMOUNT = '-' + utils.formatQNT(total, 8);
+                    }
+                    else {
+                        entry.AMOUNT = utils.formatQNT(total, 8);
+                    }
+                }
+                else {
+                    if (trade.buyer == account) {
+                        entry.AMOUNT = utils.formatQNT(trade.quantity, 8);
+                    }
+                    else {
+                        entry.AMOUNT = '-' + utils.formatQNT(trade.quantity, 8);
+                    }
+                }
+            }
+            return entry;
+        }
+        function getSymbol(id) {
+            return id;
+        }
+        function encodeTxType(type, subType) {
+            if (type == 2 && subType == 4)
+                return 'Buy order';
+            if (type == 2 && subType == 3)
+                return 'Sell order';
+            if (type == 1 && subType == 0)
+                return 'Message';
+            if (type == 0 && subType == 0)
+                return 'Transfer';
+            if (type == 2 && subType == 2)
+                return 'Transfer';
+            if (type == 2 && subType == 6)
+                return 'Cancel buy';
+            if (type == 2 && subType == 5)
+                return 'Cancel sell';
+            if (type == 4 && subType == 0)
+                return 'Balance lease';
+            if (type == 2 && subType == 0)
+                return 'Asset Issuance';
+            return 'Other';
+        }
+        function removeCommas(str) {
+            return str ? str.replace(/,/g, '') : '';
+        }
+        function historyToCSV(entries) {
+            var buffer = [];
+            buffer.push("ID,TIME,TYPE,ACCOUNT,ASSET,ASSET_SYMBOL,AMOUNT,PRICE,TOTAL,FEE,MESSAGE");
+            entries.reverse();
+            entries.forEach(function (history) {
+                buffer.push([
+                    JSON.stringify(history.ID),
+                    history.TIME,
+                    history.TYPE,
+                    history.ACCOUNT,
+                    history.ASSET,
+                    history.ASSET_SYMBOL,
+                    history.AMOUNT,
+                    history.PRICE,
+                    history.TOTAL,
+                    history.FEE,
+                    JSON.stringify(history.MESSAGE)
+                ].map(function (x) { return removeCommas(x); }).join(','));
+            });
+            return buffer.join('\n');
+        }
+        function download(content, fileName) {
+            var blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+            saveAs(blob, fileName);
+        }
+        return dialogs.dialog({
+            id: 'download',
+            title: 'Download account history (CSV)',
+            targetEvent: $event,
+            okButton: false,
+            cancelButton: true,
+            locals: locals,
+            style: "\n        .dialog-download md-progress-linear {\n          margin-top: 8px !important;\n          margin-bottom: 8px !important;\n        }\n        .dialog-download .md-button {\n          text-align: left !important;\n          margin-left: 0px !important;\n          padding-left: 0px !important;\n        }\n      ",
+            template: "\n        <div layout=\"column\" class=\"dialog-download\">\n          <div layout=\"row\">Transactions ({{vm.transactions.array.length}})</div>\n          <md-progress-linear md-mode=\"determinate\" ng-value=\"vm.transactions.percent\"></md-progress-linear>\n          <div layout=\"row\">Trades ({{vm.trades.array.length}})</div>\n          <md-progress-linear md-mode=\"determinate\" ng-value=\"vm.trades.percent\"></md-progress-linear>\n          <!--<div>\n            <p>Total Transactions: {{vm.transactions.total}}</p>\n            <p>Count Transactions: {{vm.transactions.array.length}}</p>\n            <p>Percent: {{vm.transactions.percent}}</p>\n            <p>Total Trades: {{vm.trades.total}}</p>\n            <p>Count Trades: {{vm.trades.array.length}}</p>\n            <p>Percent: {{vm.trades.percent}}</p>\n          </div>-->\n          <div>\n            <div ng-repeat=\"currency in vm.currencies\">\n              <md-button ng-click=\"currency.download()\">Download {{currency.symbol}}.csv</md-button> View\n            </div>\n          </div>\n        </div>\n      "
+        });
+    }
+    dialogs.download = download;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function etherTransactionReceipt(status, message) {
+        return dialogs.dialog({
+            id: 'EtherTransactionReceipt',
+            title: "Transaction Receipt",
+            cancelButton: false,
+            okButton: true,
+            locals: {
+                status: status,
+                message: message
+            },
+            template: "\n        <h2>{{vm.status}}</h2><br>\n        <label ng-if=\"vm.status==='Success'\">Transaction hash is: {{vm.message}}</label>\n        <label ng-if=\"vm.status==='Error'\">{{vm.message}}</label>\n      "
+        });
+    }
+    dialogs.etherTransactionReceipt = etherTransactionReceipt;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function jsonDetails($event, jsonObject, title, fields, detailedObject, jsonText) {
+        return dialogs.dialog({
+            id: 'jsonDetails',
+            title: title,
+            targetEvent: $event,
+            cancelButton: false,
+            locals: {
+                jsonObject: jsonObject,
+                detailedObject: detailedObject || jsonObject,
+                viewNum: (fields === null || fields === void 0 ? void 0 : fields.length) > 0 ? 0 : 1,
+                fields: fields,
+                jsonText: jsonText,
+                toggle: function (num) {
+                    this.viewNum = num;
+                }
+            },
+            style: "\n         .details td {\n            padding: 8px;\n         }\n         .value {\n            opacity: 0.6;\n         }\n         .switcher-col {\n           margin-left: -40px;\n           margin-right: -20px;\n         }\n         .switcher {\n            opacity: 40%;\n            transform: rotate(-90deg);\n            font-size: smaller !important;    \n            width: 100px;\n            height: 93px;\n            min-width: 32px;\n            padding: 0;\n            margin: 0;\n         }\n         .on {\n            opacity: 100%;\n         }\n        ",
+            template: "\n        <div layout=\"row\" flex>\n        \n          <div ng-if=\"vm.fields || vm.json\" layout=\"column\" class=\"switcher-col\">\n            <md-button ng-if=\"vm.fields\" ng-class=\"{'on': vm.viewNum == 0}\" ng-click=\"vm.toggle(0)\" class=\"switcher\">\n                Table view\n            </md-button>\n            <md-button ng-class=\"{'on': vm.viewNum == 1}\" ng-click=\"vm.toggle(1)\" class=\"switcher\">\n                JSON formatted\n            </md-button>\n            <md-button ng-if=\"vm.jsonText\" ng-class=\"{'on': vm.viewNum == 2}\" ng-click=\"vm.toggle(2)\" class=\"switcher\">\n                JSON text\n            </md-button>\n          </div>\n          \n          <div ng-if=\"vm.viewNum == 0\">\n            <table class=\"details\">\n                <tr ng-repeat=\"item in vm.fields\" class=\"row\">\n                    <td>{{item[1] || item[0]}}</td><td class=\"value\" ng-bind-html=\"vm.detailedObject[item[0]]\"></td>\n                </tr>\n            </table>\n          </div>\n          \n          <div layout=\"column\" flex ng-if=\"vm.viewNum == 1\">\n            <json-formatter json=\"vm.jsonObject\" open=\"1\" class=\"json-formatter-dark\"></json-formatter>\n          </div>\n          \n          <div layout=\"column\" flex ng-if=\"vm.viewNum == 2\">\n            <textarea readonly style=\"height: 100%\">{{vm.jsonObject | json}}</textarea>\n          </div>\n        </div>\n      "
+        });
+    }
+    dialogs.jsonDetails = jsonDetails;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function prompt($event, title, description, defaultValue) {
+        var $q = heat.$inject.get('$q');
+        var deferred = $q.defer();
+        var locals = {
+            v: {
+                value: defaultValue || ''
+            },
+            description: description || '',
+        };
+        dialogs.dialog({
+            id: 'prompt',
+            title: title,
+            targetEvent: $event,
+            template: "\n        <p>{{vm.description}}</p>\n        <md-input-container flex>\n          <input id=\"pwd\" type=\"password\" ng-model=\"vm.v.value\" autocomplete=\"off\" aria-label=\"Password\" auto-focus/><br>\n        </md-input-container>\n      ",
+            locals: locals
+        }).then(function () {
+            deferred.resolve(locals.v.value);
+        }, deferred.reject);
+        return deferred.promise;
+    }
+    dialogs.prompt = prompt;
+    function simplePrompt($event, title, description, fields) {
+        var $q = heat.$inject.get('$q');
+        var deferred = $q.defer();
+        var locals = {
+            description: description,
+            fields: fields
+        };
+        dialogs.dialog({
+            id: 'prompt',
+            title: title,
+            targetEvent: $event,
+            template: "\n        <p>{{vm.description}}</p>\n        <md-list>\n          <md-list-item class=\"md-2-line\" ng-repeat=\"item in vm.fields\">\n            <md-input-container flex>\n              <label>{{item.label}}</label>\n              <!--<input id=\"1\" type=\"text\" ng-model=\"item.value\" autocomplete=\"off\" auto-focus/>-->\n              <input type=\"text\" ng-model=\"item.value\" autocomplete=\"off\"/>\n            </md-input-container>\n          </md-list-item>\n        </md-list>\n      ",
+            locals: locals
+        }).then(function () {
+            deferred.resolve(locals.fields.map(function (v) { return v.value; }));
+        }, deferred.reject);
+        return deferred.promise;
+    }
+    dialogs.simplePrompt = simplePrompt;
+    function alert($event, title, description) {
+        var $q = heat.$inject.get('$q');
+        var deferred = $q.defer();
+        var locals = {
+            description: description || '',
+        };
+        dialogs.dialog({
+            id: 'alert',
+            title: title,
+            targetEvent: $event,
+            template: "\n        <p>{{vm.description}}</p>\n      ",
+            locals: locals
+        }).then(function () {
+            deferred.resolve();
+        }, deferred.reject);
+        return deferred.promise;
+    }
+    dialogs.alert = alert;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function showProgressMessage($event, message) {
+        dialogs.dialog({
+            id: 'shutdown',
+            title: message,
+            targetEvent: $event,
+            okButton: false,
+            template: "\n        <div layout=\"row\" layout-padding layout-align=center center\" flex>\n          <md-progress-circular md-mode=\"indeterminate\"></md-progress-circular>\n        </div>\n      "
+        });
+    }
+    dialogs.showProgressMessage = showProgressMessage;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function textEditor(title, content, saveContentFunc, copyToClipboardFunc) {
+        dialogs.dialog({
+            id: 'textEditor',
+            title: title,
+            okButton: false,
+            cancelButton: false,
+            locals: {
+                copyToClipboard: copyToClipboardFunc
+                    ? function () {
+                        copyToClipboardFunc(this.content);
+                    }
+                    : null,
+                save: function () {
+                    saveContentFunc(this.content);
+                    dialogs.$mdDialog().hide();
+                },
+                close: function () {
+                    dialogs.$mdDialog().hide();
+                },
+                content: content
+            },
+            template: "\n        <!--<md-input-container flex>-->\n        <p>\n          <textarea rows=\"20\" ng-model=\"vm.content\" id=\"content-textarea\"></textarea>\n        </p>\n        <!--</md-input-container>-->\n        <div layout=\"row\" layout-align=\"center center\" style=\"min-height: 25px\">\n          <md-button class=\"md-primary\" ng-if=\"vm.copyToClipboard\" ng-click=\"vm.copyToClipboard()\">Copy</md-button>\n          <md-button class=\"md-primary\" ng-click=\"vm.save()\">Save</md-button>\n          <md-button class=\"md-primary\" ng-click=\"vm.close()\">Close</md-button>\n        </div>\n      ",
+            style: "\n        #content-textarea {\n            width: 100%;\n        }\n      "
+        });
+    }
+    dialogs.textEditor = textEditor;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function transactionDetails($event, transaction) {
+        var settings = heat.$inject.get('settings');
+        dialogs.dialog({
+            id: 'transactionDetails',
+            title: 'Transaction details',
+            targetEvent: $event,
+            cancelButton: false,
+            locals: {
+                date: dateFormat(utils.timestampToDate(transaction.timestamp), settings.get(SettingsService.DATEFORMAT_DEFAULT)),
+                amount: utils.commaFormat(utils.convertToQNTf(transaction.amount.toString())) + ' HEAT',
+                source: transaction.sender,
+                destination: transaction.recipient,
+                transactionId: transaction.transaction,
+                confirmed: transaction.confirmations ? 'YES' : 'NO'
+            },
+            style: "\n        .dialog-transaction-details td {\n          padding: 8px;\n        }\n      ",
+            template: "\n        <div layout=\"column\" class=\"dialog-transaction-details\">\n          <table>\n            <tr><td>Time</td><td>{{vm.date}}</td></tr>\n            <tr><td>Amount</td><td>{{vm.amount}}</td></tr>\n            <tr><td>Source</td><td>{{vm.source}}</td></tr>\n            <tr><td>Destination</td><td>{{vm.destination}}</td></tr>\n            <tr><td>Transaction ID</td><td>{{vm.transactionId}}</td></tr>\n            <tr><td>Confirmed</td><td>{{vm.confirmed}}</td></tr>\n          </table>\n        </div>\n      "
+        });
+    }
+    dialogs.transactionDetails = transactionDetails;
+})(dialogs || (dialogs = {}));
+var dialogs;
+(function (dialogs) {
+    function withdraw(_to, _amount) {
+        var lightwalletService = heat.$inject.get('lightwalletService');
+        var user = heat.$inject.get('user');
+        lightwalletService.sendEther(user.currency.address, _to, _amount);
+        dialogs.$mdDialog().hide();
+    }
+    function withdrawEther($event) {
+        return dialogs.dialog({
+            id: 'withdrawEtherWallet',
+            title: "Send Ether",
+            targetEvent: $event,
+            cancelButton: true,
+            okButton: false,
+            locals: {
+                withdraw: withdraw,
+                recipient: undefined,
+                amount: undefined
+            },
+            style: "\n      .fee-button {\n        max-width:140px !important;\n      }\n    ",
+            template: "\n        <md-input-container flex>\n          <input ng-model=\"vm.recipient\" name=\"recipient\" placeholder=\"Recipient address\" autocomplete=\"off\" required />\n        </md-input-container>\n        <md-input-container flex>\n          <input ng-model=\"vm.amount\" name=\"amount\" placeholder = \"Amount (in Wei)\" autocomplete=\"off\" required />\n        </md-input-container>\n        <md-button ng-click=\"0\" ng-disabled=\"true\" class=\"fee fee-button\">Fee: 0.000420 ETH</md-button>\n        <div layout=\"row\" layout-align=\"center center\" style=\"min-height: 25px\">\n          <md-button class=\"md-primary\" ng-disabled=\"!vm.amount || !vm.recipient\" ng-href=\"#/ethwallet\" ng-click=\"vm.withdraw(vm.recipient, vm.amount)\">Send</md-button>\n        </div>\n      "
+        });
+    }
+    dialogs.withdrawEther = withdrawEther;
+})(dialogs || (dialogs = {}));
 var LoginComponent = (function () {
     function LoginComponent($scope, $q, user, $location, heat, localKeyStore, secretGenerator, clipboard, $mdToast, env, settings, walletFile, panel, lightwalletService) {
         this.$scope = $scope;
@@ -12167,6 +12167,7 @@ var LoginComponent = (function () {
         this.pageCreateNameType = 'public';
         this.pageCreateUserName = '';
         this.pageCreateLoading = false;
+        this.visiblePassphrase = true;
         try {
             this.isFileSaverSupported = !!new Blob;
         }
@@ -12346,8 +12347,9 @@ var LoginComponent = (function () {
         saveAs(blob, "heatledger-".concat(this.pageCreateUserName, "-").concat(this.pageCreateAccount, ".txt"));
     };
     LoginComponent.prototype.showPassphrase = function () {
-        this.panel.show("\n      <div layout=\"column\" flex class=\"toolbar-copy-passphrase\">\n        <md-input-container flex>\n          <textarea rows=\"2\" flex ng-bind=\"vm.secretPhrase\" readonly ng-trim=\"false\"></textarea>\n        </md-input-container>\n      </div>\n    ", {
-            secretPhrase: this.pageCreateSecretPhrase
+        this.panel.show("\n      <div layout=\"column\" flex class=\"toolbar-copy-passphrase\">\n        <md-input-container flex>\n          <textarea rows=\"3\" flex ng-bind=\"vm.secretPhrase\" readonly ng-trim=\"false\"></textarea>\n          <div>Public key:</div>\n          <div>{{vm.publicKey}}</div>\n        </md-input-container>\n      </div>\n    ", {
+            secretPhrase: this.pageCreateSecretPhrase,
+            publicKey: this.pageCreatePublicKey
         });
     };
     LoginComponent.prototype.templateText = function () {
@@ -12443,7 +12445,7 @@ var LoginComponent = (function () {
         RouteConfig('/login'),
         Component({
             selector: 'login',
-            template: "\n    <div layout=\"column\" flex layout-align=\"start center\">\n      <div layout=\"column\" layout-padding class=\"outer-container\">\n        <div layout=\"column\" layout-align=\"start center\" layout-padding>\n          <img src=\"assets/heatwallet.png\" class=\"wallet\">\n        </div>\n        <div layout=\"column\" flex>\n\n          <!-- SIGNIN, CREATE & ADD buttons -->\n          <div layout=\"column\" flex ng-if=\"!vm.page\">\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='signin'\" aria-label=\"Sign in\" ng-show=\"vm.localKeys.length\">\n                <md-tooltip md-direction=\"bottom\">Sign in with your Password (or Pin Code)</md-tooltip>\n                Sign in\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='create';vm.generateNewSecretPhrase()\" aria-label=\"Create\">\n                <md-tooltip md-direction=\"bottom\">Create a new account</md-tooltip>\n                Create\n              </md-button>\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page='add'\" aria-label=\"Add\">\n                <md-tooltip md-direction=\"bottom\">Add existing account</md-tooltip>\n                Add\n              </md-button>\n            </div>\n          </div>\n\n          <!-- SIGNIN page (dropdown shows keys in wallet, must enter pin) -->\n          <div layout=\"column\" flex ng-if=\"vm.page=='signin'\">\n            <div layout=\"column\" flex>\n              <md-input-container>\n                <label>Account</label>\n                <md-select ng-model=\"vm.pageSigninAccount\" ng-change=\"vm.pageSigninPincode=null;\">\n                  <md-option ng-repeat=\"key in vm.localKeys\" value=\"{{key.account}}\">{{key.name||key.account}}</md-option>\n                </md-select>\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex ng-show=\"vm.pageSigninAccount\">\n                <label>Password (or Pin Code)</label>\n                <input type=\"password\" ng-model=\"vm.pageSigninPincode\" required name=\"pincode\" maxlength=\"64\">\n              </md-input-container>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\" ng-show=\"vm.pageSigninWrongPincode\">\n              <b>sorry, buts that the wrong pincode</b>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page=''\" aria-label=\"Back\">Options</md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageSinginLogin()\"\n                ng-disabled=\"!vm.pageSigninPincode||!vm.pageSigninAccount\" aria-label=\"Continue in\">Sign in</md-button>\n            </div>\n          </div>\n\n          <!-- CREATE page (0) -->\n          <div layout=\"column\" flex ng-if=\"vm.page=='create'\">\n            <div layout=\"row\" flex layout-align=\"center center\">\n              <md-input-container flex>\n                <label>User name</label>\n                <input ng-model=\"vm.pageCreateUserName\" required name=\"username\" maxlength=\"100\" input-append=\"@heatwallet.com\">\n              </md-input-container>\n              <md-input-container flex style=\"max-width:120px !important\">\n                <md-icon md-font-set=\"regular-font\">@heatwallet.com</md-icon>\n                <input style=\"visibility: hidden;\">\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Secret phrase</label>\n                <textarea rows=\"2\" flex ng-model=\"vm.pageCreateSecretPhrase\" readonly ng-trim=\"false\" id=\"create-new-textarea\"></textarea>\n                <!--copy to clipboard using clipboard.js, see https://www.npmjs.com/package/clipboard-->\n                <md-icon id=\"copy-secret\" data-clipboard-target=\"#create-new-textarea\" md-font-library=\"material-icons\" class=\"clickable-icon\">\n                  <md-tooltip md-direction=\"right\">Copy to clipboard</md-tooltip>content_copy\n                </md-icon>\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Password (or Pin Code) (required min length 4)</label>\n                <input type=\"password\" ng-model=\"vm.pageCreatePincode\" required name=\"pincode\" maxlength=\"64\"\n                    ng-pattern=\"/^[a-zA-Z0-9_.-]{4,15}$/\">\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-radio-group ng-model=\"vm.pageCreateNameType\">\n                <md-radio-button value=\"public\" class=\"md-primary\">\n                  Publicly searchable email account id\n                </md-radio-button>\n                <md-radio-button value=\"private\" class=\"md-primary\">\n                  Private email account id (sender must know it)\n                </md-radio-button>\n              </md-radio-group>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page=''\" aria-label=\"Back\">Options</md-button>\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.generateNewSecretPhrase()\" aria-label=\"Other\">\n                Renew pass\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='create1'\"\n                ng-disabled=\"!vm.pageCreateUserName || !vm.pageCreateSecretPhrase || !vm.isValidPincode(vm.pageCreatePincode)\"\n                aria-label=\"Continue\">Continue</md-button>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\">\n              <br>\n              <span class=\"account-preview\">{{vm.pageCreateAccount}}</span>\n              <br>\n              <span>BIP44 compatible = <b>{{vm.bip44Compatible?'TRUE':'FALSE'}}</b></span>\n            </div>\n          </div>\n\n          <!-- CREATE page (1) -->\n          <div layout=\"column\" flex ng-if=\"vm.page.indexOf('create')!=-1\" ng-show=\"vm.page=='create1'\" layout-padding>\n            <div layout=\"column\" flex>\n              <p>Although we have absolutely nothing against robots, we still would like to know if you are one.</p>\n            </div>\n            <div layout=\"row\" flex layout-align=\"center center\">\n              <no-captcha ng-if=\"!vm.useExternalCaptcha\" g-recaptcha-response=\"vm.pageCreateRecaptchaResponse\" expired-callback=\"vm.recaptchaExpired()\"></no-captcha>\n              <md-button ng-if=\"vm.useExternalCaptcha\" ng-click=\"vm.doChallenge()\" class=\"md-raised md-primary\" ng-disabled=\"vm.pageCreateRecaptchaResponse\">Click here</md-button>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='create'\" aria-label=\"Back\">Back</md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.createAccount();vm.page='create2'\" ng-disabled=\"!vm.pageCreateRecaptchaResponse\"\n                aria-label=\"Continue\">Create Account</md-button>\n            </div>\n          </div>\n\n          <!-- CREATE page (2) -->\n          <div layout=\"column\" flex ng-if=\"vm.page.indexOf('create')!=-1\" ng-show=\"vm.page=='create2'\">\n            <div layout=\"column\" flex layout-padding ng-show=\"vm.pageCreateLoading\">\n              <div layout=\"row\" layout-align=\"space-around\">\n                <md-progress-circular md-mode=\"indeterminate\"></md-progress-circular>\n              </div>\n              <span>Creating your account, making it extra special for you.</span>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\" ng-show=\"vm.pageCreateError\">\n              <span>Something went wrong it seems</span>\n              <span>This is what we got back from our blockchain minions:</span>\n              <span><b>{{vm.pageCreateError}}</b></span>\n              <md-button class=\"md-raised md-primary\" ng-click=\"vm.page='create'\" aria-label=\"Back\">Try again</md-button>\n            </div>\n          </div>\n\n          <!-- CREATE page (3 - success page) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='createSuccess'\">\n            <div layout=\"column\" flex layout-align=\"start center\">\n              <h2>Congratulations, it worked!</h2>\n              <div>We advise you print or write down your HEAT secret passprase, if lost you will loose access to your HEAT.<br>\n              Please pick one or more methods to back up your passphrase listed below.</div>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button ng-click=\"vm.printPassphrase()\">\n                <md-icon md-font-library=\"material-icons\">print</md-icon>\n                &nbsp;&nbsp;Print\n              </md-button>\n              <md-button ng-click=\"vm.savePassphrase()\" ng-if=\"vm.isFileSaverSupported\">\n                <md-icon md-font-library=\"material-icons\">save</md-icon>\n                &nbsp;&nbsp;Save\n              </md-button>\n              <md-button ng-click=\"vm.showPassphrase()\">\n                <md-icon md-font-library=\"material-icons\">content_copy</md-icon>\n                &nbsp;&nbsp;Copy\n              </md-button>\n              <md-button ng-click=\"vm.showPassphrase=!vm.showPassphrase\">\n                <md-icon md-font-library=\"material-icons\">arrow_drop_down_circle</md-icon>\n                &nbsp;&nbsp;{{vm.showPassphrase?'Hide':'Reveal'}}\n              </md-button>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\" ng-show=\"vm.showPassphrase\">\n              <p>Passphrase for {{vm.pageCreateUserName}} ({{vm.pageCreateAccount}}):</p>\n              <p><code id=\"claim2-passphrase\">{{vm.pageCreateSecretPhrase}}</code></p>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-checkbox ng-model=\"vm.passphraseBackedUp\" aria-label=\"I have backed up my passphrase\">\n              I have safely backed up my passphrase\n              </md-checkbox>\n              <md-button class=\"md-raised md-primary\" ng-click=\"vm.createLocalAccount($event)\" ng-disabled=\"!vm.passphraseBackedUp\">Continue</md-button>\n            </div>\n          </div>\n\n          <!-- ADD page (choose add secret phrase or open wallet file) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='add'\">\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page=''\" aria-label=\"Back\">\n                <md-tooltip md-direction=\"bottom\">Go back one page</md-tooltip>\n                Back\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='addSecret'\" aria-label=\"Add secret phrase\">\n                <md-tooltip md-direction=\"bottom\">Add single key through secret phrase</md-tooltip>\n                Secret Phrase\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='addWallet'\" aria-label=\"Open wallet file\">\n                <md-tooltip md-direction=\"bottom\">Load wallet file</md-tooltip>\n                Wallet File\n              </md-button>\n            </div>\n          </div>\n\n          <!-- ADD page (adds single secret phrase) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='addSecret'\">\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Secret phrase</label>\n                <textarea rows=\"2\" flex ng-model=\"vm.pageAddSecretPhrase\" ng-trim=\"false\" ng-change=\"vm.pageAddSecretPhraseChanged()\"></textarea>\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Password (or Pin Code) (required)</label>\n                <input type=\"password\" ng-model=\"vm.pageAddPincode\" required name=\"pincode\" maxlength=\"64\">\n              </md-input-container>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page='add'\" aria-label=\"Back\">\n                <md-tooltip md-direction=\"bottom\">Go back one page</md-tooltip>\n                Back\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageAddAddSecretPhrase()\" ng-disabled=\"!vm.pageAddSecretPhrase||!vm.pageAddPincode\" aria-label=\"Add\">\n                <md-tooltip md-direction=\"bottom\">Add and encrypt this secretphrase to your device</md-tooltip>\n                Add\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageAddLogin()\" ng-disabled=\"!vm.pageAddSecretPhrase\" aria-label=\"Sign in\">\n                <md-tooltip md-direction=\"bottom\">Sign in without storing your secretphrase</md-tooltip>\n                Sign in\n              </md-button>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\">\n              <br>\n              <span class=\"account-preview\">{{vm.pageAddCalculatedAccountId}}</span>\n              <span ng-show=\"vm.pageAddSecretPhraseHasHiddenChars\" class=\"account-preview\">\n                Secret phrase has hidden characters!&nbsp;<a href=\"#\" ng-click=\"vm.pageAddRemoveSecretPhraseHiddenChars()\">remove</a>\n              </span>\n              <br>\n              <span>BIP44 compatible = <b>{{vm.bip44Compatible?'TRUE':'FALSE'}}</b></span>\n            </div>\n          </div>\n\n          <!-- ADD page (opens wallet file) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='addWallet'\">\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <input type=\"file\" onchange=\"angular.element(this).scope().vm.pageAddFileInputChange(this.files)\">\n              </md-input-container>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\" ng-show=\"vm.pageAddWalletInvalid\">\n              <p><b>Invalid wallet file</b></p>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page='add'\" aria-label=\"Back\">\n                <md-tooltip md-direction=\"bottom\">Go back one page</md-tooltip>\n                Back\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageAddWalletImportContinue()\" ng-disabled=\"!vm.pageAddWallet\" aria-label=\"Continue\">\n                <md-tooltip md-direction=\"bottom\">Click to open wallet explorer</md-tooltip>\n                Continue\n              </md-button>\n            </div>\n          </div>\n\n        </div>\n      </div>\n    </div>\n  "
+            template: "\n    <div layout=\"column\" flex layout-align=\"start center\">\n      <div layout=\"column\" layout-padding class=\"outer-container\">\n        <div layout=\"column\" layout-align=\"start center\" layout-padding>\n          <img src=\"assets/heatwallet.png\" class=\"wallet\">\n        </div>\n        <div layout=\"column\" flex>\n\n          <!-- SIGNIN, CREATE & ADD buttons -->\n          <div layout=\"column\" flex ng-if=\"!vm.page\">\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='signin'\" aria-label=\"Sign in\" ng-show=\"vm.localKeys.length\">\n                <md-tooltip md-direction=\"bottom\">Sign in with your Password (or Pin Code)</md-tooltip>\n                Sign in\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='create';vm.generateNewSecretPhrase()\" aria-label=\"Create\">\n                <md-tooltip md-direction=\"bottom\">Create a new account</md-tooltip>\n                Create\n              </md-button>\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page='add'\" aria-label=\"Add\">\n                <md-tooltip md-direction=\"bottom\">Add existing account</md-tooltip>\n                Add\n              </md-button>\n            </div>\n          </div>\n\n          <!-- SIGNIN page (dropdown shows keys in wallet, must enter pin) -->\n          <div layout=\"column\" flex ng-if=\"vm.page=='signin'\">\n            <div layout=\"column\" flex>\n              <md-input-container>\n                <label>Account</label>\n                <md-select ng-model=\"vm.pageSigninAccount\" ng-change=\"vm.pageSigninPincode=null;\">\n                  <md-option ng-repeat=\"key in vm.localKeys\" value=\"{{key.account}}\">{{key.name||key.account}}</md-option>\n                </md-select>\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex ng-show=\"vm.pageSigninAccount\">\n                <label>Password (or Pin Code)</label>\n                <input type=\"password\" ng-model=\"vm.pageSigninPincode\" required name=\"pincode\" maxlength=\"64\">\n              </md-input-container>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\" ng-show=\"vm.pageSigninWrongPincode\">\n              <b>sorry, buts that the wrong pincode</b>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page=''\" aria-label=\"Back\">Options</md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageSinginLogin()\"\n                ng-disabled=\"!vm.pageSigninPincode||!vm.pageSigninAccount\" aria-label=\"Continue in\">Sign in</md-button>\n            </div>\n          </div>\n\n          <!-- CREATE page (0) -->\n          <div layout=\"column\" flex ng-if=\"vm.page=='create'\">\n            <div layout=\"row\" flex layout-align=\"center center\">\n              <md-input-container flex>\n                <label>User name</label>\n                <input ng-model=\"vm.pageCreateUserName\" required name=\"username\" maxlength=\"100\" input-append=\"@heatwallet.com\">\n              </md-input-container>\n              <md-input-container flex style=\"max-width:120px !important\">\n                <md-icon md-font-set=\"regular-font\">@heatwallet.com</md-icon>\n                <input style=\"visibility: hidden;\">\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Secret phrase</label>\n                <textarea rows=\"2\" flex ng-model=\"vm.pageCreateSecretPhrase\" readonly ng-trim=\"false\" id=\"create-new-textarea\"></textarea>\n                <!--copy to clipboard using clipboard.js, see https://www.npmjs.com/package/clipboard-->\n                <md-icon id=\"copy-secret\" data-clipboard-target=\"#create-new-textarea\" md-font-library=\"material-icons\" class=\"clickable-icon\">\n                  <md-tooltip md-direction=\"right\">Copy to clipboard</md-tooltip>content_copy\n                </md-icon>\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Password (or Pin Code) (required min length 4)</label>\n                <input type=\"password\" ng-model=\"vm.pageCreatePincode\" required name=\"pincode\" maxlength=\"64\"\n                    ng-pattern=\"/^[a-zA-Z0-9_.-]{4,15}$/\">\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-radio-group ng-model=\"vm.pageCreateNameType\">\n                <md-radio-button value=\"public\" class=\"md-primary\">\n                  Publicly searchable email account id\n                </md-radio-button>\n                <md-radio-button value=\"private\" class=\"md-primary\">\n                  Private email account id (sender must know it)\n                </md-radio-button>\n              </md-radio-group>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page=''\" aria-label=\"Back\">Options</md-button>\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.generateNewSecretPhrase()\" aria-label=\"Other\">\n                Renew pass\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='create1'\"\n                ng-disabled=\"!vm.pageCreateUserName || !vm.pageCreateSecretPhrase || !vm.isValidPincode(vm.pageCreatePincode)\"\n                aria-label=\"Continue\">Continue</md-button>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\">\n              <br>\n              <span class=\"account-preview\">{{vm.pageCreateAccount}}</span>\n              <br>\n              Public key\n              <br>\n              <span class=\"account-preview\">{{vm.pageCreatePublicKey}}</span>\n              <br>\n              <span>BIP44 compatible = <b>{{vm.bip44Compatible?'TRUE':'FALSE'}}</b></span>\n            </div>\n          </div>\n\n          <!-- CREATE page (1) -->\n          <div layout=\"column\" flex ng-if=\"vm.page.indexOf('create')!=-1\" ng-show=\"vm.page=='create1'\" layout-padding>\n            <div layout=\"column\" flex>\n              <p>Although we have absolutely nothing against robots, we still would like to know if you are one.</p>\n            </div>\n            <div layout=\"row\" flex layout-align=\"center center\">\n              <no-captcha ng-if=\"!vm.useExternalCaptcha\" g-recaptcha-response=\"vm.pageCreateRecaptchaResponse\" expired-callback=\"vm.recaptchaExpired()\"></no-captcha>\n              <md-button ng-if=\"vm.useExternalCaptcha\" ng-click=\"vm.doChallenge()\" class=\"md-raised md-primary\" ng-disabled=\"vm.pageCreateRecaptchaResponse\">Click here</md-button>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='create'\" aria-label=\"Back\">Back</md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.createAccount();vm.page='create2'\" ng-disabled=\"!vm.pageCreateRecaptchaResponse\"\n                aria-label=\"Continue\">Create Account</md-button>\n            </div>\n          </div>\n\n          <!-- CREATE page (2) -->\n          <div layout=\"column\" flex ng-if=\"vm.page.indexOf('create')!=-1\" ng-show=\"vm.page=='create2'\">\n            <div layout=\"column\" flex layout-padding ng-show=\"vm.pageCreateLoading\">\n              <div layout=\"row\" layout-align=\"space-around\">\n                <md-progress-circular md-mode=\"indeterminate\"></md-progress-circular>\n              </div>\n              <span>Creating your account, making it extra special for you.</span>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\" ng-show=\"vm.pageCreateError\">\n              <span>Something went wrong it seems</span>\n              <span>This is what we got back from our blockchain minions:</span>\n              <span><b>{{vm.pageCreateError}}</b></span>\n              <md-button class=\"md-raised md-primary\" ng-click=\"vm.page='create'\" aria-label=\"Back\">Try again</md-button>\n            </div>\n          </div>\n\n          <!-- CREATE page (3 - success page) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='createSuccess'\">\n            <div layout=\"column\" flex layout-align=\"start center\">\n              <h2>Congratulations, it worked!</h2>\n              <div>We advise you print or write down your HEAT secret passprase, if lost you will loose access to your HEAT.<br>\n              Please pick one or more methods to back up your passphrase listed below.</div>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button ng-click=\"vm.printPassphrase()\">\n                <md-icon md-font-library=\"material-icons\">print</md-icon>\n                &nbsp;Print\n              </md-button>\n              <md-button ng-click=\"vm.savePassphrase()\" ng-if=\"vm.isFileSaverSupported\">\n                <md-icon md-font-library=\"material-icons\">save</md-icon>\n                &nbsp;Save\n              </md-button>\n              <md-button ng-click=\"vm.showPassphrase()\">\n                <md-icon md-font-library=\"material-icons\">content_copy</md-icon>\n                &nbsp;Show\n              </md-button>\n              <md-button ng-click=\"vm.visiblePassphrase = !vm.visiblePassphrase\">\n                <md-icon md-font-library=\"material-icons\">arrow_drop_down_circle</md-icon>\n                &nbsp;{{vm.visiblePassphrase ? 'Hide' : 'Reveal'}}\n              </md-button>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\" ng-show=\"vm.visiblePassphrase\">\n              <p>Passphrase for {{vm.pageCreateUserName}} ({{vm.pageCreateAccount}}):</p>\n              <p><code id=\"claim2-passphrase\">{{vm.pageCreateSecretPhrase}}</code></p>\n              <p>Public key:<br><code id=\"claim2-pubkey\">{{vm.pageCreatePublicKey}}</code></p>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-checkbox ng-model=\"vm.passphraseBackedUp\" aria-label=\"I have backed up my passphrase\">\n              I have safely backed up my passphrase\n              </md-checkbox>\n              <md-button class=\"md-raised md-primary\" ng-click=\"vm.createLocalAccount($event)\" ng-disabled=\"!vm.passphraseBackedUp\">Continue</md-button>\n            </div>\n          </div>\n\n          <!-- ADD page (choose add secret phrase or open wallet file) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='add'\">\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page=''\" aria-label=\"Back\">\n                <md-tooltip md-direction=\"bottom\">Go back one page</md-tooltip>\n                Back\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='addSecret'\" aria-label=\"Add secret phrase\">\n                <md-tooltip md-direction=\"bottom\">Add single key through secret phrase</md-tooltip>\n                Secret Phrase\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.page='addWallet'\" aria-label=\"Open wallet file\">\n                <md-tooltip md-direction=\"bottom\">Load wallet file</md-tooltip>\n                Wallet File\n              </md-button>\n            </div>\n          </div>\n\n          <!-- ADD page (adds single secret phrase) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='addSecret'\">\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Secret phrase</label>\n                <textarea rows=\"2\" flex ng-model=\"vm.pageAddSecretPhrase\" ng-trim=\"false\" ng-change=\"vm.pageAddSecretPhraseChanged()\"></textarea>\n              </md-input-container>\n            </div>\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <label>Password (or Pin Code) (required)</label>\n                <input type=\"password\" ng-model=\"vm.pageAddPincode\" required name=\"pincode\" maxlength=\"64\">\n              </md-input-container>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page='add'\" aria-label=\"Back\">\n                <md-tooltip md-direction=\"bottom\">Go back one page</md-tooltip>\n                Back\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageAddAddSecretPhrase()\" ng-disabled=\"!vm.pageAddSecretPhrase||!vm.pageAddPincode\" aria-label=\"Add\">\n                <md-tooltip md-direction=\"bottom\">Add and encrypt this secretphrase to your device</md-tooltip>\n                Add\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageAddLogin()\" ng-disabled=\"!vm.pageAddSecretPhrase\" aria-label=\"Sign in\">\n                <md-tooltip md-direction=\"bottom\">Sign in without storing your secretphrase</md-tooltip>\n                Sign in\n              </md-button>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\">\n              <br>\n              <span class=\"account-preview\">{{vm.pageAddCalculatedAccountId}}</span>\n              <span ng-show=\"vm.pageAddSecretPhraseHasHiddenChars\" class=\"account-preview\">\n                Secret phrase has hidden characters!&nbsp;<a href=\"#\" ng-click=\"vm.pageAddRemoveSecretPhraseHiddenChars()\">remove</a>\n              </span>\n              <br>\n              <span>BIP44 compatible = <b>{{vm.bip44Compatible?'TRUE':'FALSE'}}</b></span>\n            </div>\n          </div>\n\n          <!-- ADD page (opens wallet file) -->\n          <div layout=\"column\" flex ng-show=\"vm.page=='addWallet'\">\n            <div layout=\"column\" flex>\n              <md-input-container flex>\n                <input type=\"file\" onchange=\"angular.element(this).scope().vm.pageAddFileInputChange(this.files)\">\n              </md-input-container>\n            </div>\n            <div layout=\"column\" layout-align=\"center center\" ng-show=\"vm.pageAddWalletInvalid\">\n              <p><b>Invalid wallet file</b></p>\n            </div>\n            <div layout=\"row\" layout-align=\"center center\">\n              <md-button class=\"md-warn md-raised\" ng-click=\"vm.page='add'\" aria-label=\"Back\">\n                <md-tooltip md-direction=\"bottom\">Go back one page</md-tooltip>\n                Back\n              </md-button>\n              <md-button class=\"md-primary md-raised\" ng-click=\"vm.pageAddWalletImportContinue()\" ng-disabled=\"!vm.pageAddWallet\" aria-label=\"Continue\">\n                <md-tooltip md-direction=\"bottom\">Click to open wallet explorer</md-tooltip>\n                Continue\n              </md-button>\n            </div>\n          </div>\n\n        </div>\n      </div>\n    </div>\n  "
         }),
         Inject('$scope', '$q', 'user', '$location', 'heat', 'localKeyStore', 'secretGenerator', 'clipboard', '$mdToast', 'env', 'settings', 'walletFile', 'panel', 'lightwalletService'),
         __metadata("design:paramtypes", [Object, Function, UserService, Object, HeatService,
@@ -18167,6 +18169,8 @@ var SendMessageDialog = (function (_super) {
         _this.recipient = recipient;
         _this.recipientPublicKey = recipientPublicKey;
         _this.userMessage = userMessage;
+        _this.missRecipient = false;
+        _this.missRecipientPubKey = false;
         _this.dialogTitle = 'Send Message';
         _this.dialogDescription = 'Description on how to send message';
         _this.okBtnTitle = 'SEND';
@@ -18179,21 +18183,24 @@ var SendMessageDialog = (function (_super) {
         var _this = this;
         var builder = new DialogFieldBuilder($scope);
         return [
-            builder.account('recipient', this.recipient).
-                label('Recipient').
-                onchange(function () {
+            builder.account('recipient', this.recipient)
+                .label('Recipient')
+                .onchange(function () {
+                if (_this.missRecipient) {
+                    _this.missRecipient = false;
+                    return;
+                }
                 _this.fields['recipientPublicKey'].value = null;
-                _this.fields['message'].changed();
+                _this.missRecipientPubKey = true;
                 _this.heat.api.getPublicKey(_this.fields['recipient'].value, true).then(function (publicKey) {
                     _this.fields['recipientPublicKey'].value = publicKey;
                     $scope.$evalAsync(function () {
                         _this.fields['recipient']['accountExists'] = true;
-                        _this.fields['messageWarning'].visible(false);
                     });
                 }, function (reason) {
                     $scope.$evalAsync(function () {
                         _this.fields['recipient']['accountExists'] = false;
-                        _this.fields['messageWarning'].visible(true);
+                        _this.fields['recipientPublicKey'].value = null;
                     });
                 });
             })
@@ -18216,15 +18223,22 @@ var SendMessageDialog = (function (_super) {
                 return deferred.promise;
             })
                 .required(),
-            builder.staticText('messageWarning', 'Message field will be visible only if the receiver account is known by the HEAT p2p network.')
-                .visible(true),
+            builder.text('recipientPublicKey', this.recipientPublicKey)
+                .label("Recipient public key")
+                .onchange(function () {
+                if (_this.missRecipientPubKey) {
+                    _this.missRecipientPubKey = false;
+                    return;
+                }
+                var recipientId = heat.crypto.getAccountIdFromPublicKey(_this.fields['recipientPublicKey'].value);
+                var f = _this.fields['recipient'];
+                _this.missRecipient = true;
+                f.setSearchText(recipientId);
+            }),
             builder.text('message', this.userMessage)
                 .rows(2)
                 .required(true)
-                .label('Message'),
-            builder.staticText('messageWarning', 'This message will be stored encrypted in HEAT blockchain')
-                .visible(true),
-            builder.hidden('recipientPublicKey', this.recipientPublicKey)
+                .label('Message')
         ];
     };
     SendMessageDialog.prototype.getTransactionBuilder = function () {
@@ -18764,12 +18778,259 @@ var BitcoinAccountComponent = (function () {
     ], BitcoinAccountComponent);
     return BitcoinAccountComponent;
 }());
+var BitcoinCashAccountComponent = (function () {
+    function BitcoinCashAccountComponent($scope, bchBlockExplorerService, bchPendingTransactions, $interval, $mdToast, settings, user) {
+        this.$scope = $scope;
+        this.bchBlockExplorerService = bchBlockExplorerService;
+        this.bchPendingTransactions = bchPendingTransactions;
+        this.$interval = $interval;
+        this.$mdToast = $mdToast;
+        this.settings = settings;
+        this.user = user;
+        this.pendingTransactions = [];
+        this.prevIndex = 0;
+        this.busy = true;
+    }
+    BitcoinCashAccountComponent.prototype.$onInit = function () {
+        var _this = this;
+        this.refresh();
+        var listener = this.updatePendingTransactions.bind(this);
+        this.bchPendingTransactions.addListener(listener);
+        this.updatePendingTransactions();
+        var promise = this.$interval(this.timerHandler.bind(this), 30000);
+        this.timerHandler();
+        this.$scope.$on('$destroy', function () {
+            _this.bchPendingTransactions.removeListener(listener);
+            _this.$interval.cancel(promise);
+        });
+    };
+    BitcoinCashAccountComponent.prototype.timerHandler = function () {
+        var _this = this;
+        this.refresh();
+        if (this.pendingTransactions.length) {
+            this.prevIndex += 1;
+            if (this.prevIndex >= this.pendingTransactions.length) {
+                this.prevIndex = 0;
+            }
+            var pendingTxn_3 = this.pendingTransactions[this.prevIndex];
+            this.bchBlockExplorerService.getTxInfo(pendingTxn_3.txId).then(function (data) {
+                if (data.blockHeight > 0) {
+                    _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with id ".concat(pendingTxn_3.txId, " found")).hideDelay(2000));
+                    _this.bchPendingTransactions.remove(pendingTxn_3.address, pendingTxn_3.txId, pendingTxn_3.time);
+                }
+            }, function (err) {
+                console.log('Transaction not found', err);
+            });
+        }
+    };
+    BitcoinCashAccountComponent.prototype.updatePendingTransactions = function () {
+        var _this = this;
+        this.$scope.$evalAsync(function () {
+            _this.pendingTransactions = [];
+            var addr = _this.user.currency.address;
+            var txns = _this.bchPendingTransactions.pending[addr];
+            if (txns) {
+                var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
+                txns.forEach(function (tx) {
+                    _this.pendingTransactions.push({
+                        date: dateFormat(new Date(tx.time), format),
+                        time: tx.time,
+                        txId: tx.txId,
+                        address: addr
+                    });
+                });
+                _this.pendingTransactions.sort(function (a, b) { return b.time - a.time; });
+            }
+        });
+    };
+    BitcoinCashAccountComponent.prototype.refresh = function () {
+        var _this = this;
+        this.busy = true;
+        this.balanceUnconfirmed = "";
+        this.bchBlockExplorerService.getBalance(this.account).then(function (info) {
+            _this.$scope.$evalAsync(function () {
+                _this.balanceUnconfirmed = new Big(parseFloat(info) / 100000000).toFixed(8);
+                _this.busy = false;
+            });
+        });
+    };
+    BitcoinCashAccountComponent = __decorate([
+        RouteConfig('/bitcoin-cash-account/:account'),
+        Component({
+            selector: 'bitcoinCashAccount',
+            inputs: ['account'],
+            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/bitcoin-cash-account/{{vm.account}}\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance: <md-progress-circular md-mode=\"indeterminate\" md-diameter=\"20px\" ng-show=\"vm.busy\"></md-progress-circular>\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} BCH\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col tx-col left\" flex>Transaction Id</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col tx-col left\" flex>\n              <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://ltc1.heatwallet.com/tx/{{item.txId}}\">{{item.txId}}</a>\n              </div>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-bch-transactions layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-bch-transactions>\n      </div>\n    </div>\n  "
+        }),
+        Inject('$scope', 'bchBlockExplorerService', 'bchPendingTransactions', '$interval', '$mdToast', 'settings', 'user'),
+        __metadata("design:paramtypes", [Object, BchBlockExplorerService,
+            BchPendingTransactionsService, Function, Object, SettingsService,
+            UserService])
+    ], BitcoinCashAccountComponent);
+    return BitcoinCashAccountComponent;
+}());
+var EthereumAccountComponent = (function () {
+    function EthereumAccountComponent($scope, web3, assetInfo, $q, user, ethBlockExplorerService, pendingService, settings, $interval, $mdToast, http) {
+        this.$scope = $scope;
+        this.web3 = web3;
+        this.assetInfo = assetInfo;
+        this.$q = $q;
+        this.user = user;
+        this.ethBlockExplorerService = ethBlockExplorerService;
+        this.pendingService = pendingService;
+        this.settings = settings;
+        this.$interval = $interval;
+        this.$mdToast = $mdToast;
+        this.http = http;
+        this.erc20Tokens = [];
+        this.pendingTransactions = [];
+        this.prevIndex = 0;
+    }
+    EthereumAccountComponent.prototype.$onInit = function () {
+        var _this = this;
+        this.personalize = this.account == this.user.currency.address;
+        this.refresh();
+        var listener = this.updatePendingTransactions.bind(this);
+        this.pendingService.addListener(listener);
+        this.updatePendingTransactions();
+        var promise = this.$interval(this.timerHandler.bind(this), 20000);
+        this.timerHandler();
+        this.$scope.$on('$destroy', function () {
+            _this.pendingService.removeListener(listener);
+            _this.$interval.cancel(promise);
+        });
+    };
+    EthereumAccountComponent.prototype.timerHandler = function () {
+        var _this = this;
+        this.refresh();
+        if (this.pendingTransactions.length) {
+            this.prevIndex += 1;
+            if (this.prevIndex >= this.pendingTransactions.length) {
+                this.prevIndex = 0;
+            }
+            var pendingTxn_4 = this.pendingTransactions[this.prevIndex];
+            if (!utils.isHex(pendingTxn_4.txHash)) {
+                this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
+                return;
+            }
+            this.ethBlockExplorerService.getTxInfo(pendingTxn_4.txHash).then(function (data) {
+                if (data.confirmations && data.confirmations > 0) {
+                    _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with hash ".concat(pendingTxn_4.txHash, " found")).hideDelay(2000));
+                    _this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
+                }
+                if (data.error && data.error.indexOf("not found") > -1) {
+                    _this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
+                }
+            }, function (err) {
+                console.log('Transaction not found', err || "");
+                if (!err) {
+                    var minutesOld = (Date.now() - pendingTxn_4.timestamp) / (1000 * 60);
+                    if (minutesOld > 60) {
+                        _this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
+                        console.log('Transaction was pending and is disappeared. Transaction is removed from pending list', pendingTxn_4);
+                    }
+                }
+            });
+        }
+    };
+    EthereumAccountComponent.prototype.updatePendingTransactions = function () {
+        var _this = this;
+        this.$scope.$evalAsync(function () {
+            _this.pendingTransactions = [];
+            var addr = _this.user.currency.address;
+            var txns = _this.pendingService.pending[addr];
+            if (txns) {
+                var format_3 = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
+                txns.forEach(function (tx) {
+                    _this.pendingTransactions.push({
+                        date: dateFormat(new Date(tx.timestamp), format_3),
+                        timestamp: tx.timestamp,
+                        txHash: tx.txHash,
+                        address: addr
+                    });
+                });
+                _this.pendingTransactions.sort(function (a, b) { return b.timestamp - a.timestamp; });
+                setTimeout(function () { return _this.loadPaymentMessages(); }, 1500);
+            }
+        });
+    };
+    EthereumAccountComponent.prototype.refresh = function () {
+        var _this = this;
+        var balances = wlt.getSavedCurrencyBalance(this.account, "ETH");
+        this.balance = balances.confirmed || "*";
+        this.balanceUnconfirmed = balances.unconfirmed;
+        this.ethBlockExplorerService.getAddressInfo(this.account).then(function (info) {
+            _this.$scope.$evalAsync(function () {
+                var balances = wlt.getSavedCurrencyBalance(_this.account, "ETH", info.ETH.balance);
+                _this.balance = balances.confirmed || "*";
+                _this.balanceUnconfirmed = balances.unconfirmed;
+                if (info.tokens) {
+                    _this.erc20Tokens = info.tokens.map(function (token) {
+                        var tokenInfo = _this.ethBlockExplorerService.tokenInfoCache[token.tokenInfo.address];
+                        var balance = token.balance
+                            ? utils.formatERC20TokenAmount(new Big(token.balance + "").toFixed(), tokenInfo ? tokenInfo.decimals : 18)
+                            : "";
+                        return {
+                            balance: balance,
+                            symbol: token.tokenInfo.symbol,
+                            name: token.tokenInfo.name,
+                            id: ''
+                        };
+                    });
+                }
+            });
+        });
+        this.loadPaymentMessages();
+    };
+    EthereumAccountComponent.prototype.loadPaymentMessages = function () {
+        var _loop_3 = function (ptx) {
+            if (ptx.message === undefined) {
+                wlt.loadPaymentMessage(ptx.txHash)
+                    .then(function (v) { return ptx.message = v; })
+                    .catch(function (reason) { return console.warn("payment message is not loaded: " + JSON.stringify(reason)); });
+            }
+        };
+        for (var _i = 0, _a = this.pendingTransactions; _i < _a.length; _i++) {
+            var ptx = _a[_i];
+            _loop_3(ptx);
+        }
+    };
+    EthereumAccountComponent.prototype.addressDetails = function ($event, address) {
+        this.http.get("https://eth1.heatwallet.com/api/v2/address/" + address).then(function (response) {
+            var parsed = angular.isString(response) ? JSON.parse(response) : response;
+            if (parsed) {
+                parsed.renderedAmount = (parsed.balance || 0) / 1000000000000000000 + " ETH";
+                var fields = [["address"], ["renderedAmount", "balance"], ["txs", "number of transactions"], ["nonce"]];
+                dialogs.jsonDetails(null, parsed, 'Address: ' + parsed.address, fields, null, true);
+            }
+        }).catch(function (reason) {
+            if (reason)
+                console.error(reason);
+        });
+    };
+    EthereumAccountComponent = __decorate([
+        RouteConfig('/ethereum-account/:account'),
+        Component({
+            selector: 'ethereumAccount',
+            inputs: ['account'],
+            styles: ["\n    .value a {\n      text-decoration: none !important;\n    }\n  "],
+            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a ng-click=\"vm.addressDetails($event, vm.account)\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance:\n            </div>\n            <div class=\"value\">\n              {{vm.balance}} ETH\n              <span style=\"font-size: small\" ng-if=\"vm.balanceUnconfirmed\"><br>{{vm.balanceUnconfirmed}} (unconfirmed)</span>\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\" flex>\n          <div class=\"col-item\" flex layout-fill>\n            <div class=\"title\">\n              ERC-20 Tokens:\n            </div>\n            <div class=\"scrollable\">\n              <div class=\"value\" ng-repeat=\"item in vm.erc20Tokens\">\n                <span class=\"balance\">{{item.balance}}</span>\n                <span class=\"symbol\"><b>{{item.symbol}}</b></span>\n                <span class=\"balance\">Token: {{item.name}}</span>\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col info-col left\" flex>Transaction Hash</div>\n              <div class=\"truncate-col left\" flex>Message</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col info-col left\" flex>\n                <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://eth1.heatwallet.com/api/v2/tx/{{item.txHash}}\">{{item.txHash}}</a>\n              </div>\n              <div class=\"truncate-col left\" ng-if=\"item.message\">\n                <span style=\"opacity: 0.5\">[{{item.message.method == 0 ? \"local\" : \"HEAT\"}}]</span> \n                {{item.message.text}}\n                <md-tooltip md-delay=\"800\">{{item.message.text}}</md-tooltip>\n              </div>\n              <span ng-if=\"!item.message\" class=\"truncate-col left\" style=\"opacity: 0.5\">--</span>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-eth-transactions layout=\"column\" flex layout-fill account=\"vm.account\" personalize=\"vm.personalize\"></virtual-repeat-eth-transactions>\n      </div>\n    </div>\n  "
+        }),
+        Inject('$scope', 'web3', 'assetInfo', '$q', 'user', 'ethBlockExplorerService', 'ethereumPendingTransactions', 'settings', '$interval', '$mdToast', 'http'),
+        __metadata("design:paramtypes", [Object, Web3Service,
+            AssetInfoService, Function, UserService,
+            EthBlockExplorerService,
+            EthereumPendingTransactionsService,
+            SettingsService, Function, Object, HttpService])
+    ], EthereumAccountComponent);
+    return EthereumAccountComponent;
+}());
 var ExploreAccountComponent = (function () {
-    function ExploreAccountComponent($scope, heat, assetInfo, $q) {
+    function ExploreAccountComponent($scope, heat, assetInfo, $q, panel) {
         this.$scope = $scope;
         this.heat = heat;
         this.assetInfo = assetInfo;
         this.$q = $q;
+        this.panel = panel;
         this.assetInfos = [];
     }
     ExploreAccountComponent.prototype.$onInit = function () {
@@ -18867,6 +19128,11 @@ var ExploreAccountComponent = (function () {
     ExploreAccountComponent.prototype.showDescription = function ($event, info) {
         dialogs.assetInfo($event, info);
     };
+    ExploreAccountComponent.prototype.showPublicKey = function ($event) {
+        this.panel.show("\n      <div layout=\"column\" flex class=\"toolbar-copy-passphrase\">\n        <md-input-container flex>                                                                                                                                                           \n          <div>Public key:</div>\n          <div>{{vm.publicKey}}</div>\n        </md-input-container>\n      </div>\n    ", {
+            publicKey: this.publicKey
+        });
+    };
     ExploreAccountComponent.prototype.getAccountAssets = function () {
         var _this = this;
         var deferred = this.$q.defer();
@@ -18904,11 +19170,11 @@ var ExploreAccountComponent = (function () {
         Component({
             selector: 'explorerAccount',
             inputs: ['account', 'type'],
-            template: "\n    <div layout=\"column\" flex layout-fill>\n      <explorer-search layout=\"column\" type=\"''\" query=\"''\"></explorer-search>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Account:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/explorer-account/{{vm.account}}/{{vm.type}}\">{{vm.accountName||vm.account}}</a>\n            </div>\n            <div ng-if=\"vm.supervisoryAccount\" style=\"font-size: x-small; margin-bottom: 6px;\">\n              under control <a href=\"#/explorer-account/{{vm.supervisoryAccount}}/transactions\">{{vm.supervisoryAccount}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Numeric account id:\n            </div>\n            <div class=\"value\">\n              {{vm.account}}\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance:\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} HEAT\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Effective balance:\n            </div>\n            <div class=\"value\">\n              {{vm.effectiveBalance}} HEAT\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Lease: [{{vm.leaseTitle}}]\n            </div>\n            <div class=\"value\">\n              <span ng-if=\"vm.currentLessee=='0'\">None</span>\n              <span ng-if=\"vm.currentLessee!='0'\">\n                <a href=\"#/explorer-account/{{vm.currentLessee}}/{{vm.type}}\">{{vm.currentLesseeName}}</a>\n              </span>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Next lease: [{{vm.nextLeaseTitle}}]\n            </div>\n            <div class=\"value\">\n              <span ng-if=\"vm.nextLessee=='0'\">None</span>\n              <span ng-if=\"vm.nextLessee!='0'\">\n                <a href=\"#/explorer-account/{{vm.nextLessee}}/{{vm.type}}\">{{vm.nextLesseeName}}</a>\n              </span>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Amount leased in:\n            </div>\n            <div class=\"value\">\n              {{vm.lessorsBalance}} HEAT\n            </div>\n          </div>\n          <div class=\"col-item\" ng-if=\"vm.currentLessee!='0'\">\n            <div class=\"title\">\n              Amount leased out:\n            </div>\n            <div class=\"value\">\n              {{vm.guaranteedBalance}} HEAT\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\" flex>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Total rewards:\n            </div>\n            <div class=\"value\">\n              {{vm.totalRewards}}\n            </div>\n          </div>\n          <div class=\"col-item\" flex layout-fill>\n            <div class=\"title\">\n              Assets:\n            </div>\n            <div class=\"scrollable\">\n              <div class=\"value\" ng-class=\"{expired: item.expired}\" ng-repeat=\"item in vm.assetInfos\">\n                <span class=\"balance\">{{item.balance}}</span>\n                <span class=\"symbol\"><b>{{item.symbol}}</b></span>\n                <span class=\"name\">\n                  <a ng-click=\"vm.showDescription($event, item)\">{{item.name}}</a>\n                </span>\n                <span class=\"issuer\">\n                  Issued by: <a href=\"#/explorer-account/{{item.issuer}}/{{vm.type}}\">{{item.issuerPublicName||item.issuer}}</a>\n                </span>\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div layout=\"row\" layout-align=\"start center\" class=\"type-row\">\n        <md-button ng-class=\"{'active':vm.type=='transactions'}\"\n          ng-disabled=\"vm.type=='transactions'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/transactions\">Transactions</md-button>\n        <md-button ng-class=\"{'active':vm.type=='blocks'}\"\n          ng-disabled=\"vm.type=='blocks'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/blocks\">Blocks</md-button>\n        <md-button ng-class=\"{'active':vm.type=='lessors'}\"\n          ng-disabled=\"vm.type=='lessors'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/lessors\">Lessors</md-button>\n        <md-button ng-class=\"{'active':vm.type=='trades'}\"\n          ng-disabled=\"vm.type=='trades'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/trades\">Trades</md-button>\n        <md-button ng-class=\"{'active':vm.type=='payments'}\"\n          ng-disabled=\"vm.type=='payments'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/payments\">Payments</md-button>\n        <span flex></span>\n        <md-button ng-click=\"vm.csv($event)\">Download CSV</md-button>\n      </div>\n      <div ng-if=\"vm.type=='transactions'\" flex layout=\"column\">\n        <virtual-repeat-transactions hide-label=\"true\" layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-transactions>\n      </div>\n      <div ng-if=\"vm.type=='blocks'\" flex layout=\"column\">\n        <explorer-latest-blocks layout=\"column\" flex account=\"vm.account\" hide-label=\"true\"></explorer-latest-blocks>\n      </div>\n      <div ng-if=\"vm.type=='trades'\" flex layout=\"column\">\n        <virtual-repeat-trades hide-label=\"true\" layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-trades>\n      </div>\n      <div ng-if=\"vm.type=='payments'\" flex layout=\"column\">\n        <virtual-repeat-payments hide-label=\"true\" layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-payments>\n      </div>\n      <div ng-if=\"vm.type=='lessors'\" flex layout=\"column\" layout-fill>\n        <md-list flex layout-fill layout=\"column\" class=\"lessors\">\n          <md-list-item class=\"header\">\n            <div class=\"truncate-col id-col left\">ID</div>\n            <div class=\"truncate-col balance-col left\">Balance</div>\n            <div class=\"truncate-col from-col left\">From</div>\n            <div class=\"truncate-col to-col left\">To</div>\n            <div class=\"truncate-col next-lessee-col\">Next</div>\n            <div class=\"truncate-col from-col\">From</div>\n            <div class=\"truncate-col to-col\" flex>To</div>\n          </md-list-item>\n          <md-virtual-repeat-container md-top-index=\"vm.topIndex\" flex layout-fill layout=\"column\" virtual-repeat-flex-helper>\n            <md-list-item md-virtual-repeat=\"item in vm.lessors\" aria-label=\"Entry\">\n              <div class=\"truncate-col id-col left\">\n                <a href=\"#/explorer-account/{{item.id}}/transactions\">{{item.id}}</a>\n              </div>\n              <div class=\"truncate-col balance-col\">\n                {{item.balance}}\n              </div>\n              <div class=\"truncate-col from-col left\">\n                {{item.currentHeightFrom}}\n              </div>\n              <div class=\"truncate-col to-col left\">\n                {{item.currentHeightTo}}\n              </div>\n              <div class=\"truncate-col next-lessee-col\">\n                <a ng-if=\"item.nextLessee\" href=\"#/explorer-account/{{item.nextLessee}}/transactions\">{{item.nextLessee}}</a>\n              </div>\n              <div class=\"truncate-col from-col\">\n                {{item.nextHeightFrom}}\n              </div>\n              <div class=\"truncate-col to-col\" flex>\n                {{item.nextHeightTo}}\n              </div>\n            </md-list-item>\n          </md-virtual-repeat-container>\n        </md-list>\n      </div>\n    </div>\n  "
+            template: "\n    <div layout=\"column\" flex layout-fill>\n      <explorer-search layout=\"column\" type=\"''\" query=\"''\"></explorer-search>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Account:\n            </div>\n            <div class=\"value\">\n              <a ng-click=\"vm.showPublicKey()\">{{vm.accountName||vm.account}}</a>\n            </div>\n            <div ng-if=\"vm.supervisoryAccount\" style=\"font-size: x-small; margin-bottom: 6px;\">\n              under control <a href=\"#/explorer-account/{{vm.supervisoryAccount}}/transactions\">{{vm.supervisoryAccount}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Numeric account id:\n            </div>\n            <div class=\"value\">\n              {{vm.account}}\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance:\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} HEAT\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Effective balance:\n            </div>\n            <div class=\"value\">\n              {{vm.effectiveBalance}} HEAT\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Lease: [{{vm.leaseTitle}}]\n            </div>\n            <div class=\"value\">\n              <span ng-if=\"vm.currentLessee=='0'\">None</span>\n              <span ng-if=\"vm.currentLessee!='0'\">\n                <a href=\"#/explorer-account/{{vm.currentLessee}}/{{vm.type}}\">{{vm.currentLesseeName}}</a>\n              </span>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Next lease: [{{vm.nextLeaseTitle}}]\n            </div>\n            <div class=\"value\">\n              <span ng-if=\"vm.nextLessee=='0'\">None</span>\n              <span ng-if=\"vm.nextLessee!='0'\">\n                <a href=\"#/explorer-account/{{vm.nextLessee}}/{{vm.type}}\">{{vm.nextLesseeName}}</a>\n              </span>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Amount leased in:\n            </div>\n            <div class=\"value\">\n              {{vm.lessorsBalance}} HEAT\n            </div>\n          </div>\n          <div class=\"col-item\" ng-if=\"vm.currentLessee!='0'\">\n            <div class=\"title\">\n              Amount leased out:\n            </div>\n            <div class=\"value\">\n              {{vm.guaranteedBalance}} HEAT\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\" flex>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Total rewards:\n            </div>\n            <div class=\"value\">\n              {{vm.totalRewards}}\n            </div>\n          </div>\n          <div class=\"col-item\" flex layout-fill>\n            <div class=\"title\">\n              Assets:\n            </div>\n            <div class=\"scrollable\">\n              <div class=\"value\" ng-class=\"{expired: item.expired}\" ng-repeat=\"item in vm.assetInfos\">\n                <span class=\"balance\">{{item.balance}}</span>\n                <span class=\"symbol\"><b>{{item.symbol}}</b></span>\n                <span class=\"name\">\n                  <a ng-click=\"vm.showDescription($event, item)\">{{item.name}}</a>\n                </span>\n                <span class=\"issuer\">\n                  Issued by: <a href=\"#/explorer-account/{{item.issuer}}/{{vm.type}}\">{{item.issuerPublicName||item.issuer}}</a>\n                </span>\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div layout=\"row\" layout-align=\"start center\" class=\"type-row\">\n        <md-button ng-class=\"{'active':vm.type=='transactions'}\"\n          ng-disabled=\"vm.type=='transactions'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/transactions\">Transactions</md-button>\n        <md-button ng-class=\"{'active':vm.type=='blocks'}\"\n          ng-disabled=\"vm.type=='blocks'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/blocks\">Blocks</md-button>\n        <md-button ng-class=\"{'active':vm.type=='lessors'}\"\n          ng-disabled=\"vm.type=='lessors'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/lessors\">Lessors</md-button>\n        <md-button ng-class=\"{'active':vm.type=='trades'}\"\n          ng-disabled=\"vm.type=='trades'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/trades\">Trades</md-button>\n        <md-button ng-class=\"{'active':vm.type=='payments'}\"\n          ng-disabled=\"vm.type=='payments'\"\n          ng-href=\"#/explorer-account/{{vm.account}}/payments\">Payments</md-button>\n        <span flex></span>\n        <md-button ng-click=\"vm.csv($event)\">Download CSV</md-button>\n      </div>\n      <div ng-if=\"vm.type=='transactions'\" flex layout=\"column\">\n        <virtual-repeat-transactions hide-label=\"true\" layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-transactions>\n      </div>\n      <div ng-if=\"vm.type=='blocks'\" flex layout=\"column\">\n        <explorer-latest-blocks layout=\"column\" flex account=\"vm.account\" hide-label=\"true\"></explorer-latest-blocks>\n      </div>\n      <div ng-if=\"vm.type=='trades'\" flex layout=\"column\">\n        <virtual-repeat-trades hide-label=\"true\" layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-trades>\n      </div>\n      <div ng-if=\"vm.type=='payments'\" flex layout=\"column\">\n        <virtual-repeat-payments hide-label=\"true\" layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-payments>\n      </div>\n      <div ng-if=\"vm.type=='lessors'\" flex layout=\"column\" layout-fill>\n        <md-list flex layout-fill layout=\"column\" class=\"lessors\">\n          <md-list-item class=\"header\">\n            <div class=\"truncate-col id-col left\">ID</div>\n            <div class=\"truncate-col balance-col left\">Balance</div>\n            <div class=\"truncate-col from-col left\">From</div>\n            <div class=\"truncate-col to-col left\">To</div>\n            <div class=\"truncate-col next-lessee-col\">Next</div>\n            <div class=\"truncate-col from-col\">From</div>\n            <div class=\"truncate-col to-col\" flex>To</div>\n          </md-list-item>\n          <md-virtual-repeat-container md-top-index=\"vm.topIndex\" flex layout-fill layout=\"column\" virtual-repeat-flex-helper>\n            <md-list-item md-virtual-repeat=\"item in vm.lessors\" aria-label=\"Entry\">\n              <div class=\"truncate-col id-col left\">\n                <a href=\"#/explorer-account/{{item.id}}/transactions\">{{item.id}}</a>\n              </div>\n              <div class=\"truncate-col balance-col\">\n                {{item.balance}}\n              </div>\n              <div class=\"truncate-col from-col left\">\n                {{item.currentHeightFrom}}\n              </div>\n              <div class=\"truncate-col to-col left\">\n                {{item.currentHeightTo}}\n              </div>\n              <div class=\"truncate-col next-lessee-col\">\n                <a ng-if=\"item.nextLessee\" href=\"#/explorer-account/{{item.nextLessee}}/transactions\">{{item.nextLessee}}</a>\n              </div>\n              <div class=\"truncate-col from-col\">\n                {{item.nextHeightFrom}}\n              </div>\n              <div class=\"truncate-col to-col\" flex>\n                {{item.nextHeightTo}}\n              </div>\n            </md-list-item>\n          </md-virtual-repeat-container>\n        </md-list>\n      </div>\n    </div>\n  "
         }),
-        Inject('$scope', 'heat', 'assetInfo', '$q'),
+        Inject('$scope', 'heat', 'assetInfo', '$q', 'panel'),
         __metadata("design:paramtypes", [Object, HeatService,
-            AssetInfoService, Function])
+            AssetInfoService, Function, PanelService])
     ], ExploreAccountComponent);
     return ExploreAccountComponent;
 }());
@@ -19237,270 +19503,6 @@ var SearchAccountsProvider = (function () {
     };
     return SearchAccountsProvider;
 }());
-var BitcoinCashAccountComponent = (function () {
-    function BitcoinCashAccountComponent($scope, bchBlockExplorerService, bchPendingTransactions, $interval, $mdToast, settings, user) {
-        this.$scope = $scope;
-        this.bchBlockExplorerService = bchBlockExplorerService;
-        this.bchPendingTransactions = bchPendingTransactions;
-        this.$interval = $interval;
-        this.$mdToast = $mdToast;
-        this.settings = settings;
-        this.user = user;
-        this.pendingTransactions = [];
-        this.prevIndex = 0;
-        this.busy = true;
-    }
-    BitcoinCashAccountComponent.prototype.$onInit = function () {
-        var _this = this;
-        this.refresh();
-        var listener = this.updatePendingTransactions.bind(this);
-        this.bchPendingTransactions.addListener(listener);
-        this.updatePendingTransactions();
-        var promise = this.$interval(this.timerHandler.bind(this), 30000);
-        this.timerHandler();
-        this.$scope.$on('$destroy', function () {
-            _this.bchPendingTransactions.removeListener(listener);
-            _this.$interval.cancel(promise);
-        });
-    };
-    BitcoinCashAccountComponent.prototype.timerHandler = function () {
-        var _this = this;
-        this.refresh();
-        if (this.pendingTransactions.length) {
-            this.prevIndex += 1;
-            if (this.prevIndex >= this.pendingTransactions.length) {
-                this.prevIndex = 0;
-            }
-            var pendingTxn_3 = this.pendingTransactions[this.prevIndex];
-            this.bchBlockExplorerService.getTxInfo(pendingTxn_3.txId).then(function (data) {
-                if (data.blockHeight > 0) {
-                    _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with id ".concat(pendingTxn_3.txId, " found")).hideDelay(2000));
-                    _this.bchPendingTransactions.remove(pendingTxn_3.address, pendingTxn_3.txId, pendingTxn_3.time);
-                }
-            }, function (err) {
-                console.log('Transaction not found', err);
-            });
-        }
-    };
-    BitcoinCashAccountComponent.prototype.updatePendingTransactions = function () {
-        var _this = this;
-        this.$scope.$evalAsync(function () {
-            _this.pendingTransactions = [];
-            var addr = _this.user.currency.address;
-            var txns = _this.bchPendingTransactions.pending[addr];
-            if (txns) {
-                var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
-                txns.forEach(function (tx) {
-                    _this.pendingTransactions.push({
-                        date: dateFormat(new Date(tx.time), format),
-                        time: tx.time,
-                        txId: tx.txId,
-                        address: addr
-                    });
-                });
-                _this.pendingTransactions.sort(function (a, b) { return b.time - a.time; });
-            }
-        });
-    };
-    BitcoinCashAccountComponent.prototype.refresh = function () {
-        var _this = this;
-        this.busy = true;
-        this.balanceUnconfirmed = "";
-        this.bchBlockExplorerService.getBalance(this.account).then(function (info) {
-            _this.$scope.$evalAsync(function () {
-                _this.balanceUnconfirmed = new Big(parseFloat(info) / 100000000).toFixed(8);
-                _this.busy = false;
-            });
-        });
-    };
-    BitcoinCashAccountComponent = __decorate([
-        RouteConfig('/bitcoin-cash-account/:account'),
-        Component({
-            selector: 'bitcoinCashAccount',
-            inputs: ['account'],
-            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/bitcoin-cash-account/{{vm.account}}\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance: <md-progress-circular md-mode=\"indeterminate\" md-diameter=\"20px\" ng-show=\"vm.busy\"></md-progress-circular>\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} BCH\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col tx-col left\" flex>Transaction Id</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col tx-col left\" flex>\n              <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://ltc1.heatwallet.com/tx/{{item.txId}}\">{{item.txId}}</a>\n              </div>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-bch-transactions layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-bch-transactions>\n      </div>\n    </div>\n  "
-        }),
-        Inject('$scope', 'bchBlockExplorerService', 'bchPendingTransactions', '$interval', '$mdToast', 'settings', 'user'),
-        __metadata("design:paramtypes", [Object, BchBlockExplorerService,
-            BchPendingTransactionsService, Function, Object, SettingsService,
-            UserService])
-    ], BitcoinCashAccountComponent);
-    return BitcoinCashAccountComponent;
-}());
-var EthereumAccountComponent = (function () {
-    function EthereumAccountComponent($scope, web3, assetInfo, $q, user, ethBlockExplorerService, pendingService, settings, $interval, $mdToast, http) {
-        this.$scope = $scope;
-        this.web3 = web3;
-        this.assetInfo = assetInfo;
-        this.$q = $q;
-        this.user = user;
-        this.ethBlockExplorerService = ethBlockExplorerService;
-        this.pendingService = pendingService;
-        this.settings = settings;
-        this.$interval = $interval;
-        this.$mdToast = $mdToast;
-        this.http = http;
-        this.erc20Tokens = [];
-        this.pendingTransactions = [];
-        this.prevIndex = 0;
-    }
-    EthereumAccountComponent.prototype.$onInit = function () {
-        var _this = this;
-        this.personalize = this.account == this.user.currency.address;
-        this.refresh();
-        var listener = this.updatePendingTransactions.bind(this);
-        this.pendingService.addListener(listener);
-        this.updatePendingTransactions();
-        var promise = this.$interval(this.timerHandler.bind(this), 20000);
-        this.timerHandler();
-        this.$scope.$on('$destroy', function () {
-            _this.pendingService.removeListener(listener);
-            _this.$interval.cancel(promise);
-        });
-    };
-    EthereumAccountComponent.prototype.timerHandler = function () {
-        var _this = this;
-        this.refresh();
-        if (this.pendingTransactions.length) {
-            this.prevIndex += 1;
-            if (this.prevIndex >= this.pendingTransactions.length) {
-                this.prevIndex = 0;
-            }
-            var pendingTxn_4 = this.pendingTransactions[this.prevIndex];
-            if (!utils.isHex(pendingTxn_4.txHash)) {
-                this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
-                return;
-            }
-            this.ethBlockExplorerService.getTxInfo(pendingTxn_4.txHash).then(function (data) {
-                if (data.confirmations && data.confirmations > 0) {
-                    _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with hash ".concat(pendingTxn_4.txHash, " found")).hideDelay(2000));
-                    _this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
-                }
-                if (data.error && data.error.indexOf("not found") > -1) {
-                    _this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
-                }
-            }, function (err) {
-                console.log('Transaction not found', err || "");
-                if (!err) {
-                    var minutesOld = (Date.now() - pendingTxn_4.timestamp) / (1000 * 60);
-                    if (minutesOld > 60) {
-                        _this.pendingService.remove(pendingTxn_4.address, pendingTxn_4.txHash, pendingTxn_4.timestamp);
-                        console.log('Transaction was pending and is disappeared. Transaction is removed from pending list', pendingTxn_4);
-                    }
-                }
-            });
-        }
-    };
-    EthereumAccountComponent.prototype.updatePendingTransactions = function () {
-        var _this = this;
-        this.$scope.$evalAsync(function () {
-            _this.pendingTransactions = [];
-            var addr = _this.user.currency.address;
-            var txns = _this.pendingService.pending[addr];
-            if (txns) {
-                var format_3 = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
-                txns.forEach(function (tx) {
-                    _this.pendingTransactions.push({
-                        date: dateFormat(new Date(tx.timestamp), format_3),
-                        timestamp: tx.timestamp,
-                        txHash: tx.txHash,
-                        address: addr
-                    });
-                });
-                _this.pendingTransactions.sort(function (a, b) { return b.timestamp - a.timestamp; });
-                setTimeout(function () { return _this.loadPaymentMessages(); }, 1500);
-            }
-        });
-    };
-    EthereumAccountComponent.prototype.refresh = function () {
-        var _this = this;
-        var balances = wlt.getSavedCurrencyBalance(this.account, "ETH");
-        this.balance = balances.confirmed || "*";
-        this.balanceUnconfirmed = balances.unconfirmed;
-        this.ethBlockExplorerService.getAddressInfo(this.account).then(function (info) {
-            _this.$scope.$evalAsync(function () {
-                var balances = wlt.getSavedCurrencyBalance(_this.account, "ETH", info.ETH.balance);
-                _this.balance = balances.confirmed || "*";
-                _this.balanceUnconfirmed = balances.unconfirmed;
-                if (info.tokens) {
-                    _this.erc20Tokens = info.tokens.map(function (token) {
-                        var tokenInfo = _this.ethBlockExplorerService.tokenInfoCache[token.tokenInfo.address];
-                        var balance = token.balance
-                            ? utils.formatERC20TokenAmount(new Big(token.balance + "").toFixed(), tokenInfo ? tokenInfo.decimals : 18)
-                            : "";
-                        return {
-                            balance: balance,
-                            symbol: token.tokenInfo.symbol,
-                            name: token.tokenInfo.name,
-                            id: ''
-                        };
-                    });
-                }
-            });
-        });
-        this.loadPaymentMessages();
-    };
-    EthereumAccountComponent.prototype.loadPaymentMessages = function () {
-        var _loop_3 = function (ptx) {
-            if (ptx.message === undefined) {
-                wlt.loadPaymentMessage(ptx.txHash)
-                    .then(function (v) { return ptx.message = v; })
-                    .catch(function (reason) { return console.warn("payment message is not loaded: " + JSON.stringify(reason)); });
-            }
-        };
-        for (var _i = 0, _a = this.pendingTransactions; _i < _a.length; _i++) {
-            var ptx = _a[_i];
-            _loop_3(ptx);
-        }
-    };
-    EthereumAccountComponent.prototype.addressDetails = function ($event, address) {
-        this.http.get("https://eth1.heatwallet.com/api/v2/address/" + address).then(function (response) {
-            var parsed = angular.isString(response) ? JSON.parse(response) : response;
-            if (parsed) {
-                parsed.renderedAmount = (parsed.balance || 0) / 1000000000000000000 + " ETH";
-                var fields = [["address"], ["renderedAmount", "balance"], ["txs", "number of transactions"], ["nonce"]];
-                dialogs.jsonDetails(null, parsed, 'Address: ' + parsed.address, fields, null, true);
-            }
-        }).catch(function (reason) {
-            if (reason)
-                console.error(reason);
-        });
-    };
-    EthereumAccountComponent = __decorate([
-        RouteConfig('/ethereum-account/:account'),
-        Component({
-            selector: 'ethereumAccount',
-            inputs: ['account'],
-            styles: ["\n    .value a {\n      text-decoration: none !important;\n    }\n  "],
-            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a ng-click=\"vm.addressDetails($event, vm.account)\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance:\n            </div>\n            <div class=\"value\">\n              {{vm.balance}} ETH\n              <span style=\"font-size: small\" ng-if=\"vm.balanceUnconfirmed\"><br>{{vm.balanceUnconfirmed}} (unconfirmed)</span>\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\" flex>\n          <div class=\"col-item\" flex layout-fill>\n            <div class=\"title\">\n              ERC-20 Tokens:\n            </div>\n            <div class=\"scrollable\">\n              <div class=\"value\" ng-repeat=\"item in vm.erc20Tokens\">\n                <span class=\"balance\">{{item.balance}}</span>\n                <span class=\"symbol\"><b>{{item.symbol}}</b></span>\n                <span class=\"balance\">Token: {{item.name}}</span>\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col info-col left\" flex>Transaction Hash</div>\n              <div class=\"truncate-col left\" flex>Message</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col info-col left\" flex>\n                <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://eth1.heatwallet.com/api/v2/tx/{{item.txHash}}\">{{item.txHash}}</a>\n              </div>\n              <div class=\"truncate-col left\" ng-if=\"item.message\">\n                <span style=\"opacity: 0.5\">[{{item.message.method == 0 ? \"local\" : \"HEAT\"}}]</span> \n                {{item.message.text}}\n                <md-tooltip md-delay=\"800\">{{item.message.text}}</md-tooltip>\n              </div>\n              <span ng-if=\"!item.message\" class=\"truncate-col left\" style=\"opacity: 0.5\">--</span>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-eth-transactions layout=\"column\" flex layout-fill account=\"vm.account\" personalize=\"vm.personalize\"></virtual-repeat-eth-transactions>\n      </div>\n    </div>\n  "
-        }),
-        Inject('$scope', 'web3', 'assetInfo', '$q', 'user', 'ethBlockExplorerService', 'ethereumPendingTransactions', 'settings', '$interval', '$mdToast', 'http'),
-        __metadata("design:paramtypes", [Object, Web3Service,
-            AssetInfoService, Function, UserService,
-            EthBlockExplorerService,
-            EthereumPendingTransactionsService,
-            SettingsService, Function, Object, HttpService])
-    ], EthereumAccountComponent);
-    return EthereumAccountComponent;
-}());
-var HomeComponent = (function () {
-    function HomeComponent(user) {
-        this.user = user;
-        user.requireLogin();
-        user.on(UserService.EVENT_UNLOCKED, function () {
-        });
-    }
-    HomeComponent = __decorate([
-        RouteConfig('/home'),
-        Component({
-            selector: 'home',
-            template: "\n    <div layout=\"column\" flex layout-padding layout-fill>\n      <virtual-repeat-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-transactions>\n      <!-- <virtual-repeat-eth-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-eth-transactions> -->\n    </div>\n  "
-        }),
-        Inject('user'),
-        __metadata("design:paramtypes", [UserService])
-    ], HomeComponent);
-    return HomeComponent;
-}());
 var FimkAccountComponent = (function () {
     function FimkAccountComponent($scope, mofoSocketService, fimkPendingTransactions, $interval, $mdToast, settings, user, router) {
         this.$scope = $scope;
@@ -19802,113 +19804,23 @@ var LtcAccountComponent = (function () {
     ], LtcAccountComponent);
     return LtcAccountComponent;
 }());
-var NxtAccountComponent = (function () {
-    function NxtAccountComponent($scope, nxtBlockExplorerService, nxtPendingTransactions, $interval, $mdToast, settings, user) {
-        this.$scope = $scope;
-        this.nxtBlockExplorerService = nxtBlockExplorerService;
-        this.nxtPendingTransactions = nxtPendingTransactions;
-        this.$interval = $interval;
-        this.$mdToast = $mdToast;
-        this.settings = settings;
+var HomeComponent = (function () {
+    function HomeComponent(user) {
         this.user = user;
-        this.pendingTransactions = [];
-        this.prevIndex = 0;
-        this.busy = true;
+        user.requireLogin();
+        user.on(UserService.EVENT_UNLOCKED, function () {
+        });
     }
-    NxtAccountComponent.prototype.$onInit = function () {
-        var _this = this;
-        this.refresh();
-        var listener = this.updatePendingTransactions.bind(this);
-        this.nxtPendingTransactions.addListener(listener);
-        this.updatePendingTransactions();
-        var promise = this.$interval(this.timerHandler.bind(this), 7000);
-        this.timerHandler();
-        this.$scope.$on('$destroy', function () {
-            _this.nxtPendingTransactions.removeListener(listener);
-            _this.$interval.cancel(promise);
-        });
-        this.sockets = [
-            {
-                name: 'HEAT_NXT_node',
-                hostUrl: 'https://nxt1.heatwallet.com'
-            },
-            {
-                name: 'Localhost',
-                hostUrl: 'http://localhost:7876'
-            }
-        ];
-        this.$scope['vm'].selectSocketEndPoint = this.sockets.find(function (w) { return _this.nxtBlockExplorerService.getHostUrl() == w.hostUrl; }).name;
-    };
-    NxtAccountComponent.prototype.changeHostAddress = function () {
-        var _this = this;
-        var ret = this.sockets.find(function (w) { return _this.$scope['vm'].selectSocketEndPoint == w.name; });
-        this.nxtBlockExplorerService.setUrl(ret.hostUrl);
-        var host = ret.hostUrl.split(':7876')[0];
-        SettingsService.changeCryptoNodeProperty('NXT', host, 'priority', 0);
-    };
-    NxtAccountComponent.prototype.timerHandler = function () {
-        var _this = this;
-        this.refresh();
-        if (this.pendingTransactions.length) {
-            this.prevIndex += 1;
-            if (this.prevIndex >= this.pendingTransactions.length) {
-                this.prevIndex = 0;
-            }
-            var pendingTxn_6 = this.pendingTransactions[this.prevIndex];
-            this.nxtBlockExplorerService.getTransactionStatus(pendingTxn_6.txId).then(function (data) {
-                if (data.confirmations) {
-                    _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with id ".concat(pendingTxn_6.txId, " found")).hideDelay(2000));
-                    _this.nxtPendingTransactions.remove(pendingTxn_6.address, pendingTxn_6.txId, pendingTxn_6.time);
-                }
-            }, function (err) {
-                console.log('Transaction not found', err);
-            });
-        }
-    };
-    NxtAccountComponent.prototype.updatePendingTransactions = function () {
-        var _this = this;
-        this.$scope.$evalAsync(function () {
-            _this.pendingTransactions = [];
-            var addr = _this.user.currency.address;
-            var txns = _this.nxtPendingTransactions.pending[addr];
-            if (txns) {
-                var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
-                txns.forEach(function (tx) {
-                    _this.pendingTransactions.push({
-                        date: dateFormat(new Date(tx.time), format),
-                        time: tx.time,
-                        txId: tx.txId,
-                        address: addr
-                    });
-                });
-                _this.pendingTransactions.sort(function (a, b) { return b.time - a.time; });
-            }
-        });
-    };
-    NxtAccountComponent.prototype.refresh = function () {
-        var _this = this;
-        this.busy = true;
-        this.balanceUnconfirmed = "";
-        this.nxtBlockExplorerService.getAccount(this.account).then(function (info) {
-            _this.$scope.$evalAsync(function () {
-                _this.balanceUnconfirmed = new Big(utils.convertToQNTf(info.balanceNQT)).toFixed(8);
-                _this.busy = false;
-            });
-        });
-    };
-    NxtAccountComponent = __decorate([
-        RouteConfig('/nxt-account/:account'),
+    HomeComponent = __decorate([
+        RouteConfig('/home'),
         Component({
-            selector: 'nxtAccount',
-            inputs: ['account'],
-            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/nxt-account/{{vm.account}}\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance:\n              <md-progress-circular style=\"display: initial; position: fixed;\" md-mode=\"indeterminate\" md-diameter=\"20px\" ng-show=\"vm.busy\"></md-progress-circular>\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} NXT\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              NXT Server:\n            </div>\n            <div class=\"value\">\n              <md-select class=\"md-select-ws\" ng-model=\"vm.selectSocketEndPoint\" ng-change=\"vm.changeHostAddress()\">\n                <md-option ng-repeat=\"socket in vm.sockets\" value=\"{{socket.name}}\">{{socket.name}}</md-option>\n              </md-select>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col info-col left\" flex>Transaction Id</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col info-col left\" flex>\n                <span>{{item.txId}}</span>\n              </div>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-nxt-transactions layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-nxt-transactions>\n      </div>\n    </div>\n  "
+            selector: 'home',
+            template: "\n    <div layout=\"column\" flex layout-padding layout-fill>\n      <virtual-repeat-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-transactions>\n      <!-- <virtual-repeat-eth-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-eth-transactions> -->\n    </div>\n  "
         }),
-        Inject('$scope', 'nxtBlockExplorerService', 'nxtPendingTransactions', '$interval', '$mdToast', 'settings', 'user'),
-        __metadata("design:paramtypes", [Object, NxtBlockExplorerService,
-            NxtPendingTransactionsService, Function, Object, SettingsService,
-            UserService])
-    ], NxtAccountComponent);
-    return NxtAccountComponent;
+        Inject('user'),
+        __metadata("design:paramtypes", [UserService])
+    ], HomeComponent);
+    return HomeComponent;
 }());
 var EditMessageComponent = (function () {
     function EditMessageComponent($scope, sendmessage, storage, $timeout, user, p2pMessaging, $mdToast) {
@@ -20251,7 +20163,7 @@ var MessengerComponent = (function () {
             selector: 'messenger',
             inputs: ['publickey'],
             styles: ["\n    messenger user-contacts {\n      width: 300px;\n      min-width: 240px;\n    }\n    messenger .control-panel {\n      margin-top: 6px;\n      margin-right: 6px;\n    }\n    messenger .outer-container {\n      padding-top: 0px;\n      padding-bottom: 0px;\n    }\n    messenger md-content {\n      height: 100%;\n      //padding: 0 0 0 12px;\n    }\n    messenger .progress-indicator {\n      padding-left: 0px;\n      padding-right: 0px;\n    }\n    messenger md-progress-linear > .md-container {\n      height: 3px;\n      max-height: 3px;\n    }\n    messenger .edit-message {\n      padding-right: 0px;\n    }\n    .control-panel button {\n      flex: auto;\n    }\n    .p2p-messages {\n      height: 100%;\n    }\n    #offchainButton.disable span {\n      color: grey;\n    }\n    #offchainButton.active {\n      background-color: green;\n    }\n    #onlineStatusButton.disable span {\n      color: grey;\n    }\n    #onlineStatusButton.active {\n      background-color: green;\n    }\n    #newContactButton {\n      max-width: 171px;\n    }\n    #newContactButton md-icon {\n      margin-right: 8px;\n      color: white;\n    }\n  "],
-            template: "\n    <div layout=\"column\" flex layout-padding layout-fill class=\"outer-container\">\n      <div layout=\"row\" flex layout-fill>\n        <div layout=\"column\">\n          <user-contacts flex layout=\"column\" ></user-contacts>\n          <div layout=\"row\" class=\"control-panel\">\n            <md-button class=\"online\" id=\"onlineStatusButton\" ng-click=\"vm.toggleOnline()\"\n            ng-class=\"{'active': vm.p2pMessaging.onlineStatus == 'online', 'disable': vm.p2pMessaging.onlineStatus !== 'online'}\">\n              <md-tooltip md-direction=\"top\">{{vm.p2pMessaging.onlineStatus == 'online' ? 'NOW STEALTH - CLICK FOR ONCHAIN' : 'NOW ONCHAIN - CLICK FOR STEALTH'}}</md-tooltip>\n              {{vm.p2pMessaging.onlineStatus == 'online' ? 'offchain  \u2714' : 'onchain'}}\n            </md-button>\n            <md-button id=\"callButton\" class=\"md-primary\" aria-label=\"Send\" ng-click=\"vm.showCallDialog($event)\">\n              <md-tooltip md-direction=\"top\">\n                Send message to user to establish the contact\n              </md-tooltip>\n              New Contact\n            </md-button>\n            <!--<md-button id=\"newContactButton\" class=\"md-primary\" aria-label=\"Add contact\" ng-click=\"vm.showSendmessageDialog($event)\">\n              <md-tooltip md-direction=\"top\">\n                Send message to new contact\n              </md-tooltip>\n              <md-icon md-font-library=\"material-icons\">add_circle_outline</md-icon>\n              New CONTACT\n            </md-button>-->\n          </div>\n        </div>\n        <div layout=\"column\" layout-fill>\n          <div class=\"row\" class=\"progress-indicator\" flex ng-show=\"vm.loading\">\n            <md-progress-linear class=\"md-primary\" md-mode=\"indeterminate\"></md-progress-linear>\n          </div>\n          <md-content flex ng-if=\"vm.p2pMessaging.onlineStatus == 'offline'\" id=\"message-batch-container\">\n            <message-batch-viewer flex layout=\"column\" container-id=\"message-batch-container\"\n                    publickey=\"::vm.publickey\"></message-batch-viewer>\n          </md-content>\n          <md-content flex ng-if=\"vm.p2pMessaging.onlineStatus == 'online' && vm.publickey != 0\" id=\"p2p-messages-container\">\n            <p2p-messages-viewer flex layout=\"column\" class=\"p2p-messages\" container-id=\"p2p-messages-container\"\n                    publickey=\"::vm.publickey\"></p2p-messages-viewer>\n          </md-content>\n          <div layout=\"row\" flex=\"none\" class=\"edit-message\">\n            <edit-message publickey=\"vm.publickey\" layout=\"row\" flex></edit-message>\n          </div>\n        </div>\n      </div>\n    </div>\n  "
+            template: "\n    <div layout=\"column\" flex layout-padding layout-fill class=\"outer-container\">\n      <div layout=\"row\" flex layout-fill>\n        <div layout=\"column\">\n          <user-contacts flex layout=\"column\" ></user-contacts>\n          <div layout=\"row\" class=\"control-panel\">\n            <md-button class=\"online\" id=\"onlineStatusButton\" ng-click=\"vm.toggleOnline()\"\n            ng-class=\"{'active': vm.p2pMessaging.onlineStatus == 'online', 'disable': vm.p2pMessaging.onlineStatus !== 'online'}\">\n              <md-tooltip md-direction=\"top\">{{vm.p2pMessaging.onlineStatus == 'online' ? 'NOW STEALTH - CLICK FOR ONCHAIN' : 'NOW ONCHAIN - CLICK FOR STEALTH'}}</md-tooltip>\n              {{vm.p2pMessaging.onlineStatus == 'online' ? 'offchain  \u2714' : 'onchain'}}\n            </md-button>\n            <md-button id=\"callButton\" class=\"md-primary\" aria-label=\"Send\" ng-click=\"vm.showCallDialog($event)\">\n              <md-tooltip md-direction=\"top\">\n                Send HEAT message to user to establish the contact\n              </md-tooltip>\n              New Contact\n            </md-button>\n            <!--<md-button id=\"newContactButton\" class=\"md-primary\" aria-label=\"Add contact\" ng-click=\"vm.showSendmessageDialog($event)\">\n              <md-tooltip md-direction=\"top\">\n                Send message to new contact\n              </md-tooltip>\n              <md-icon md-font-library=\"material-icons\">add_circle_outline</md-icon>\n              New CONTACT\n            </md-button>-->\n          </div>\n        </div>\n        <div layout=\"column\" layout-fill>\n          <div class=\"row\" class=\"progress-indicator\" flex ng-show=\"vm.loading\">\n            <md-progress-linear class=\"md-primary\" md-mode=\"indeterminate\"></md-progress-linear>\n          </div>\n          <md-content flex ng-if=\"vm.p2pMessaging.onlineStatus == 'offline'\" id=\"message-batch-container\">\n            <message-batch-viewer flex layout=\"column\" container-id=\"message-batch-container\"\n                    publickey=\"::vm.publickey\"></message-batch-viewer>\n          </md-content>\n          <md-content flex ng-if=\"vm.p2pMessaging.onlineStatus == 'online' && vm.publickey != 0\" id=\"p2p-messages-container\">\n            <p2p-messages-viewer flex layout=\"column\" class=\"p2p-messages\" container-id=\"p2p-messages-container\"\n                    publickey=\"::vm.publickey\"></p2p-messages-viewer>\n          </md-content>\n          <div layout=\"row\" flex=\"none\" class=\"edit-message\">\n            <edit-message publickey=\"vm.publickey\" layout=\"row\" flex></edit-message>\n          </div>\n        </div>\n      </div>\n    </div>\n  "
         }),
         Inject('$scope', 'user', 'sendmessage', 'P2PMessaging'),
         __metadata("design:paramtypes", [Object, UserService,
@@ -20685,6 +20597,114 @@ var P2PMessagingProbeComponent = (function () {
     ], P2PMessagingProbeComponent);
     return P2PMessagingProbeComponent;
 }());
+var NxtAccountComponent = (function () {
+    function NxtAccountComponent($scope, nxtBlockExplorerService, nxtPendingTransactions, $interval, $mdToast, settings, user) {
+        this.$scope = $scope;
+        this.nxtBlockExplorerService = nxtBlockExplorerService;
+        this.nxtPendingTransactions = nxtPendingTransactions;
+        this.$interval = $interval;
+        this.$mdToast = $mdToast;
+        this.settings = settings;
+        this.user = user;
+        this.pendingTransactions = [];
+        this.prevIndex = 0;
+        this.busy = true;
+    }
+    NxtAccountComponent.prototype.$onInit = function () {
+        var _this = this;
+        this.refresh();
+        var listener = this.updatePendingTransactions.bind(this);
+        this.nxtPendingTransactions.addListener(listener);
+        this.updatePendingTransactions();
+        var promise = this.$interval(this.timerHandler.bind(this), 7000);
+        this.timerHandler();
+        this.$scope.$on('$destroy', function () {
+            _this.nxtPendingTransactions.removeListener(listener);
+            _this.$interval.cancel(promise);
+        });
+        this.sockets = [
+            {
+                name: 'HEAT_NXT_node',
+                hostUrl: 'https://nxt1.heatwallet.com'
+            },
+            {
+                name: 'Localhost',
+                hostUrl: 'http://localhost:7876'
+            }
+        ];
+        this.$scope['vm'].selectSocketEndPoint = this.sockets.find(function (w) { return _this.nxtBlockExplorerService.getHostUrl() == w.hostUrl; }).name;
+    };
+    NxtAccountComponent.prototype.changeHostAddress = function () {
+        var _this = this;
+        var ret = this.sockets.find(function (w) { return _this.$scope['vm'].selectSocketEndPoint == w.name; });
+        this.nxtBlockExplorerService.setUrl(ret.hostUrl);
+        var host = ret.hostUrl.split(':7876')[0];
+        SettingsService.changeCryptoNodeProperty('NXT', host, 'priority', 0);
+    };
+    NxtAccountComponent.prototype.timerHandler = function () {
+        var _this = this;
+        this.refresh();
+        if (this.pendingTransactions.length) {
+            this.prevIndex += 1;
+            if (this.prevIndex >= this.pendingTransactions.length) {
+                this.prevIndex = 0;
+            }
+            var pendingTxn_6 = this.pendingTransactions[this.prevIndex];
+            this.nxtBlockExplorerService.getTransactionStatus(pendingTxn_6.txId).then(function (data) {
+                if (data.confirmations) {
+                    _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with id ".concat(pendingTxn_6.txId, " found")).hideDelay(2000));
+                    _this.nxtPendingTransactions.remove(pendingTxn_6.address, pendingTxn_6.txId, pendingTxn_6.time);
+                }
+            }, function (err) {
+                console.log('Transaction not found', err);
+            });
+        }
+    };
+    NxtAccountComponent.prototype.updatePendingTransactions = function () {
+        var _this = this;
+        this.$scope.$evalAsync(function () {
+            _this.pendingTransactions = [];
+            var addr = _this.user.currency.address;
+            var txns = _this.nxtPendingTransactions.pending[addr];
+            if (txns) {
+                var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
+                txns.forEach(function (tx) {
+                    _this.pendingTransactions.push({
+                        date: dateFormat(new Date(tx.time), format),
+                        time: tx.time,
+                        txId: tx.txId,
+                        address: addr
+                    });
+                });
+                _this.pendingTransactions.sort(function (a, b) { return b.time - a.time; });
+            }
+        });
+    };
+    NxtAccountComponent.prototype.refresh = function () {
+        var _this = this;
+        this.busy = true;
+        this.balanceUnconfirmed = "";
+        this.nxtBlockExplorerService.getAccount(this.account).then(function (info) {
+            _this.$scope.$evalAsync(function () {
+                _this.balanceUnconfirmed = new Big(utils.convertToQNTf(info.balanceNQT)).toFixed(8);
+                _this.busy = false;
+            });
+        });
+    };
+    NxtAccountComponent = __decorate([
+        RouteConfig('/nxt-account/:account'),
+        Component({
+            selector: 'nxtAccount',
+            inputs: ['account'],
+            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/nxt-account/{{vm.account}}\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance:\n              <md-progress-circular style=\"display: initial; position: fixed;\" md-mode=\"indeterminate\" md-diameter=\"20px\" ng-show=\"vm.busy\"></md-progress-circular>\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} NXT\n            </div>\n          </div>\n        </div>\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              NXT Server:\n            </div>\n            <div class=\"value\">\n              <md-select class=\"md-select-ws\" ng-model=\"vm.selectSocketEndPoint\" ng-change=\"vm.changeHostAddress()\">\n                <md-option ng-repeat=\"socket in vm.sockets\" value=\"{{socket.name}}\">{{socket.name}}</md-option>\n              </md-select>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col info-col left\" flex>Transaction Id</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col info-col left\" flex>\n                <span>{{item.txId}}</span>\n              </div>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-nxt-transactions layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-nxt-transactions>\n      </div>\n    </div>\n  "
+        }),
+        Inject('$scope', 'nxtBlockExplorerService', 'nxtPendingTransactions', '$interval', '$mdToast', 'settings', 'user'),
+        __metadata("design:paramtypes", [Object, NxtBlockExplorerService,
+            NxtPendingTransactionsService, Function, Object, SettingsService,
+            UserService])
+    ], NxtAccountComponent);
+    return NxtAccountComponent;
+}());
 var PeersComponent = (function () {
     function PeersComponent($rootScope, $scope, heat, settings) {
         this.$rootScope = $rootScope;
@@ -20815,6 +20835,207 @@ var PeersComponent = (function () {
     return PeersComponent;
 }());
 var MAX_RECT_SQUARE = 20000;
+var ServerComponent = (function () {
+    function ServerComponent($scope, serverService, heat, user, settings, $mdToast, clipboard) {
+        var _this = this;
+        this.$scope = $scope;
+        this.serverService = serverService;
+        this.heat = heat;
+        this.user = user;
+        this.settings = settings;
+        this.$mdToast = $mdToast;
+        this.clipboard = clipboard;
+        this.ROW_HEIGHT = 14;
+        this.calculatedTopIndex = 0;
+        this.topIndex = 0;
+        this.consoleRowCount = 0;
+        this.isMining = false;
+        this.isUpdatingMiningInfo = false;
+        this.miningRemaining = '*';
+        this.miningHittime = '*';
+        this.msgRegExp = /^([\d-]+\s[\d:]+)\s(.+)\s-\s(.*)/;
+        if (user.unlocked) {
+            heat.subscriber.blockPushed({ generator: user.account }, function () { _this.updateMiningInfo(); });
+            heat.subscriber.blockPopped({ generator: user.account }, function () { _this.updateMiningInfo(); });
+        }
+        else {
+            var listener_2 = function () { _this.updateMiningInfo(); };
+            user.on(UserService.EVENT_UNLOCKED, listener_2);
+            $scope.$on('$destroy', function () { return user.removeListener(UserService.EVENT_UNLOCKED, listener_2); });
+        }
+        this.hostLocal = this.settings.get(SettingsService.HEAT_HOST_LOCAL);
+        this.hostRemote = this.settings.get(SettingsService.HEAT_HOST_REMOTE);
+        this.portLocal = this.settings.get(SettingsService.HEAT_PORT_LOCAL);
+        this.portRemote = this.settings.get(SettingsService.HEAT_PORT_REMOTE);
+        this.connectionWay = this.settings["connectionWay"] || "failover";
+        SettingsService.forceServerPriority(this.connectionWay == "localhost" ? this.hostLocal : this.hostRemote, this.connectionWay == "localhost" ? this.portLocal : this.portRemote);
+        this.onOutput = function () {
+            $scope.$evalAsync(function () {
+                _this.calculatedTopIndex = _this.determineTopIndex();
+                if (!(_this.topIndex < (_this.calculatedTopIndex - 5)) || _this.consoleRowCount < _this.getLength()) {
+                    _this.topIndex = _this.calculatedTopIndex;
+                }
+            });
+        };
+        serverService.addListener('output', this.onOutput);
+        this.updateMiningInfo();
+        window.setTimeout(function () {
+            _this.topIndex = _this.determineTopIndex();
+            _this.onOutput();
+        }, 3000);
+        this.remotehostDisplay = this.hostRemote.replace('https://', '');
+        var interval = setInterval(function () {
+            if (typeof _this.miningRemaining === "number") {
+                if (_this.miningRemaining > 0) {
+                    _this.miningRemaining--;
+                }
+                else {
+                    if (Math.random() < 0.2)
+                        _this.updateMiningInfo();
+                }
+            }
+        }, 1000);
+        $scope.$on('$destroy', function () {
+            serverService.removeListener('output', _this.onOutput);
+            clearInterval(interval);
+        });
+    }
+    ServerComponent.prototype.isServerAvailable = function () {
+        return this.serverService.isHeatledgerServerDirExists();
+    };
+    ServerComponent.prototype.showInstallFolder = function () {
+        require('electron').shell.showItemInFolder(this.serverService.getAppDir('.'));
+    };
+    ServerComponent.prototype.showUserDataFolder = function () {
+        this.serverService.getUserDataDirFromMainProcess().then(function (userDataDir) {
+            var path = require('path');
+            var dir = path.join(userDataDir);
+            require('electron').shell.showItemInFolder(path.resolve(dir));
+        });
+    };
+    ServerComponent.prototype.editHeatwalletConfig = function () {
+        var _this = this;
+        this.editConfig("Client Application Config", this.settings.getHeatwalletConfigFilePath(), function () { return _this.settings.applyFailoverConfig(); });
+    };
+    ServerComponent.prototype.editHeatledgerConfig = function () {
+        this.editConfig("Heatledger server Config", this.serverService.getHeatConfigFilePath());
+    };
+    ServerComponent.prototype.editConfig = function (title, filePath, applyConfig) {
+        var _this = this;
+        this.serverService.getServerProperties(filePath).then(function (content) {
+            _this.$scope.$evalAsync(function () {
+                dialogs.textEditor(title, content, function (editedData) {
+                    var fs = require('fs');
+                    fs.writeFile(filePath, editedData, function (err) {
+                        if (err)
+                            throw err;
+                        if (applyConfig)
+                            applyConfig();
+                    });
+                }, function (content) {
+                    _this.clipboard.copyText(content, 'Copied text to clipboard');
+                });
+            });
+        });
+    };
+    ServerComponent.prototype.getItemAtIndex = function (index) {
+        return this.render(this.serverService.buffer[index]);
+    };
+    ServerComponent.prototype.getLength = function () {
+        return this.serverService.buffer.length;
+    };
+    ServerComponent.prototype.failoverUsageChanged = function () {
+        if (this.connectionWay == "failover") {
+            this.heat.switchToServer({ way: "remote", failoverEnabled: true, sameMessagingHost: false });
+        }
+        else if (this.connectionWay == "localhost") {
+            this.heat.switchToServer({ way: "local", failoverEnabled: false, sameMessagingHost: false });
+        }
+        this.settings["connectionWay"] = this.connectionWay;
+    };
+    ServerComponent.prototype.startServer = function () {
+        this.serverService.startServer();
+        this.$mdToast.show(this.$mdToast.simple().textContent("In some cases you need to Start the server A SECOND TIME!\n" +
+            "Wheter that's the case is indicated at the end of the log output (the colored text with black background).").hideDelay(10000));
+    };
+    ServerComponent.prototype.stopServer = function () {
+        this.serverService.stopServer();
+    };
+    ServerComponent.prototype.determineRowCount = function () {
+        var el = document.getElementById('server-console-container');
+        return el ? Math.round(el.clientHeight / this.ROW_HEIGHT) : 5;
+    };
+    ServerComponent.prototype.determineTopIndex = function () {
+        this.consoleRowCount = this.determineRowCount();
+        return Math.max(0, this.getLength() - this.consoleRowCount + 2);
+    };
+    ServerComponent.prototype.render = function (msg) {
+        if (angular.isUndefined(msg))
+            return msg;
+        if (angular.isUndefined(msg.rendered)) {
+            var match = this.msgRegExp.exec(msg);
+            msg.rendered = match ? { timestamp: match[1], severity: match[2], message: match[3] } : { message: msg };
+        }
+        return msg.rendered;
+    };
+    ServerComponent.prototype.startMining = function () {
+        var _this = this;
+        this.isUpdatingMiningInfo = true;
+        this.heat.api.startMining(this.user.secretPhrase).then(function (info) {
+            _this.updateMiningInfo();
+        }).catch(function (reason) {
+            _this.isUpdatingMiningInfo = false;
+        });
+    };
+    ServerComponent.prototype.stopMining = function () {
+        var _this = this;
+        this.isUpdatingMiningInfo = true;
+        this.heat.api.stopMining(this.user.secretPhrase).then(function (info) {
+            _this.updateMiningInfo();
+        }).catch(function (reason) {
+            _this.isUpdatingMiningInfo = false;
+        });
+    };
+    ServerComponent.prototype.updateMiningInfo = function () {
+        var _this = this;
+        if (this.user.unlocked) {
+            this.heat.api.getMiningInfo(this.user.secretPhrase).then(function (info) {
+                _this.isUpdatingMiningInfo = false;
+                _this.$scope.$evalAsync(function () {
+                    if (info[0]) {
+                        _this.isMining = true;
+                        _this.miningRemaining = info[0].remaining;
+                        var miningHittime = info[0].hitTime;
+                        var date = utils.timestampToDate(miningHittime);
+                        var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
+                        _this.miningHittime = dateFormat(date, format);
+                    }
+                    else {
+                        _this.isMining = false;
+                    }
+                });
+            }, function () {
+                _this.$scope.$evalAsync(function () {
+                    _this.isMining = false;
+                    _this.isUpdatingMiningInfo = false;
+                });
+            });
+        }
+    };
+    ServerComponent = __decorate([
+        RouteConfig('/server'),
+        Component({
+            selector: 'server',
+            template: "\n    <div layout=\"column\" flex layout-padding layout-fill>\n      <div layout=\"row\" class=\"button-row\">\n\n        <md-button class=\"start-stop\" ng-if=\"vm.isServerAvailable()\" ng-show=\"!vm.serverService.isRunning\" ng-click=\"vm.startServer()\">\n            Start Server</md-button>\n        <md-button class=\"start-stop md-primary\" ng-if=\"vm.isServerAvailable()\" ng-show=\"vm.serverService.isRunning\" ng-click=\"vm.stopServer()\">\n            Stop Server</md-button>\n\n        <md-menu md-position-mode=\"target-right target\" md-offset=\"34px 0px\">\n          <md-button style=\"margin-top: 5px; margin-right: 20px;\" aria-label=\"signout\" class=\"md-icon-button\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n            <i><img src=\"assets/sandwich.png\"></i>\n          </md-button>\n          <md-menu-content>\n            <md-menu-item>\n              <md-button class=\"start-stop\" ng-click=\"vm.showInstallFolder()\">\n                <md-tooltip md-direction=\"bottom\">Access your server config files and back them up before updating HEAT server</md-tooltip>\n                <span>Install Dir</span>\n              </md-button>\n            </md-menu-item>\n            <md-menu-item>\n              <md-button class=\"start-stop\" ng-click=\"vm.showUserDataFolder()\">\n                <md-tooltip md-direction=\"bottom\">Access your user profile</md-tooltip>\n                <span>User Dir</span>\n              </md-button>\n            </md-menu-item>\n            <md-menu-item>\n              <md-button ng-click=\"vm.editHeatwalletConfig()\">\n                <md-tooltip md-direction=\"bottom\">Edit application config</md-tooltip>\n                <span>Data sources config</span>\n              </md-button>\n            </md-menu-item>\n            <md-menu-item>\n              <md-button ng-click=\"vm.editHeatledgerConfig()\">\n                <md-tooltip md-direction=\"bottom\">Edit embedded Heatledger server config</md-tooltip>\n                <span>Server config</span>\n              </md-button>\n            </md-menu-item>\n          </md-menu-content>\n        </md-menu>\n\n        <label id=\"failoverUsage\" style=\"margin-left: 11px; margin-right: 9px\">Client API data from:</label>\n        <md-radio-group ng-model=\"vm.connectionWay\" aria-labelledby=\"failoverUsage\" ng-change=\"vm.failoverUsageChanged()\">\n          <md-radio-button value=\"failover\" class=\"md-primary\" style=\"margin-bottom: 7px\">Best server (use failover feature)</md-radio-button>\n          <md-radio-button value=\"localhost\" style=\"margin-bottom: 7px\">Localhost (ignore failover feature)</md-radio-button>\n        </md-radio-group>\n\n        <!--<md-switch ng-model=\"vm.connectedToLocalhost\" aria-label=\"Choose API connection\" ng-change=\"vm.connectToLocalhostChanged()\">\n          <md-tooltip md-direction=\"top\">\n            Connect client API to remotehost or to your local machine\n          </md-tooltip>\n          Client API connected to {{ vm.connectedToLocalhost ? 'localhost' : vm.remotehostDisplay }}\n        </md-switch>-->\n\n        <span flex></span>\n        <div ng-show=\"vm.isMining\" layout=\"row\" layout-align=\"center center\" class=\"mining-stats\">\n          <span>Estimated hit time: </span>\n          <span class=\"mining-stats-val\">{{vm.miningHittime}}</span>\n          <span>({{vm.miningRemaining}} sec)</span>\n        </div>\n        <md-button ng-show=\"vm.user.unlocked && !vm.isMining && !vm.isUpdatingMiningInfo\" ng-disabled=\"!vm.serverService.isReady\" class=\"start-stop\" ng-click=\"vm.startMining()\">Start Mining</md-button>\n        <md-button ng-show=\"vm.user.unlocked && vm.isMining && !vm.isUpdatingMiningInfo\" ng-disabled=\"!vm.serverService.isReady\" class=\"start-stop md-primary\" ng-click=\"vm.stopMining()\">Stop Mining</md-button>\n        <span ng-if=\"vm.user.unlocked && vm.isUpdatingMiningInfo\">Updating Mining Info...</span>\n        <a ng-if=\"vm.isServerAvailable()\" ng-show=\"!vm.user.unlocked\" class=\"start-stop\" href=\"#/login\">Sign in to start mining</a>\n      </div>\n      <div layout=\"column\" flex class=\"console\" layout-fill>\n        <md-virtual-repeat-container md-top-index=\"vm.topIndex\" flex layout-fill layout=\"column\"\n            virtual-repeat-flex-helper id=\"server-console-container\">\n          <pre md-virtual-repeat=\"item in vm\" md-on-demand aria-label=\"Entry\">\n            <span ng-if=\"!item.timestamp\">{{item.message}}</span>\n            <span ng-if=\"item.timestamp\">\n              <span class=\"date\">{{item.timestamp}}&nbsp;<span class=\"severity {{item.severity}}\">{{item.severity}}</span>&nbsp;<span class=\"message\">{{item.message}}</span>\n            </span>\n          </pre>\n        </md-virtual-repeat-container>\n      </div>\n    </div>\n  "
+        }),
+        Inject('$scope', 'server', 'heat', 'user', 'settings', '$mdToast', 'clipboard'),
+        __metadata("design:paramtypes", [Object, ServerService,
+            HeatService,
+            UserService,
+            SettingsService, Object, ClipboardService])
+    ], ServerComponent);
+    return ServerComponent;
+}());
 var OrdersProviderFactory = (function () {
     function OrdersProviderFactory(heat, $q) {
         this.heat = heat;
@@ -22445,207 +22666,6 @@ var TradesProvider = (function () {
         return this.heat.api.getTrades(this.currency, this.asset, firstIndex, lastIndex);
     };
     return TradesProvider;
-}());
-var ServerComponent = (function () {
-    function ServerComponent($scope, serverService, heat, user, settings, $mdToast, clipboard) {
-        var _this = this;
-        this.$scope = $scope;
-        this.serverService = serverService;
-        this.heat = heat;
-        this.user = user;
-        this.settings = settings;
-        this.$mdToast = $mdToast;
-        this.clipboard = clipboard;
-        this.ROW_HEIGHT = 14;
-        this.calculatedTopIndex = 0;
-        this.topIndex = 0;
-        this.consoleRowCount = 0;
-        this.isMining = false;
-        this.isUpdatingMiningInfo = false;
-        this.miningRemaining = '*';
-        this.miningHittime = '*';
-        this.msgRegExp = /^([\d-]+\s[\d:]+)\s(.+)\s-\s(.*)/;
-        if (user.unlocked) {
-            heat.subscriber.blockPushed({ generator: user.account }, function () { _this.updateMiningInfo(); });
-            heat.subscriber.blockPopped({ generator: user.account }, function () { _this.updateMiningInfo(); });
-        }
-        else {
-            var listener_2 = function () { _this.updateMiningInfo(); };
-            user.on(UserService.EVENT_UNLOCKED, listener_2);
-            $scope.$on('$destroy', function () { return user.removeListener(UserService.EVENT_UNLOCKED, listener_2); });
-        }
-        this.hostLocal = this.settings.get(SettingsService.HEAT_HOST_LOCAL);
-        this.hostRemote = this.settings.get(SettingsService.HEAT_HOST_REMOTE);
-        this.portLocal = this.settings.get(SettingsService.HEAT_PORT_LOCAL);
-        this.portRemote = this.settings.get(SettingsService.HEAT_PORT_REMOTE);
-        this.connectionWay = this.settings["connectionWay"] || "failover";
-        SettingsService.forceServerPriority(this.connectionWay == "localhost" ? this.hostLocal : this.hostRemote, this.connectionWay == "localhost" ? this.portLocal : this.portRemote);
-        this.onOutput = function () {
-            $scope.$evalAsync(function () {
-                _this.calculatedTopIndex = _this.determineTopIndex();
-                if (!(_this.topIndex < (_this.calculatedTopIndex - 5)) || _this.consoleRowCount < _this.getLength()) {
-                    _this.topIndex = _this.calculatedTopIndex;
-                }
-            });
-        };
-        serverService.addListener('output', this.onOutput);
-        this.updateMiningInfo();
-        window.setTimeout(function () {
-            _this.topIndex = _this.determineTopIndex();
-            _this.onOutput();
-        }, 3000);
-        this.remotehostDisplay = this.hostRemote.replace('https://', '');
-        var interval = setInterval(function () {
-            if (typeof _this.miningRemaining === "number") {
-                if (_this.miningRemaining > 0) {
-                    _this.miningRemaining--;
-                }
-                else {
-                    if (Math.random() < 0.2)
-                        _this.updateMiningInfo();
-                }
-            }
-        }, 1000);
-        $scope.$on('$destroy', function () {
-            serverService.removeListener('output', _this.onOutput);
-            clearInterval(interval);
-        });
-    }
-    ServerComponent.prototype.isServerAvailable = function () {
-        return this.serverService.isHeatledgerServerDirExists();
-    };
-    ServerComponent.prototype.showInstallFolder = function () {
-        require('electron').shell.showItemInFolder(this.serverService.getAppDir('.'));
-    };
-    ServerComponent.prototype.showUserDataFolder = function () {
-        this.serverService.getUserDataDirFromMainProcess().then(function (userDataDir) {
-            var path = require('path');
-            var dir = path.join(userDataDir);
-            require('electron').shell.showItemInFolder(path.resolve(dir));
-        });
-    };
-    ServerComponent.prototype.editHeatwalletConfig = function () {
-        var _this = this;
-        this.editConfig("Client Application Config", this.settings.getHeatwalletConfigFilePath(), function () { return _this.settings.applyFailoverConfig(); });
-    };
-    ServerComponent.prototype.editHeatledgerConfig = function () {
-        this.editConfig("Heatledger server Config", this.serverService.getHeatConfigFilePath());
-    };
-    ServerComponent.prototype.editConfig = function (title, filePath, applyConfig) {
-        var _this = this;
-        this.serverService.getServerProperties(filePath).then(function (content) {
-            _this.$scope.$evalAsync(function () {
-                dialogs.textEditor(title, content, function (editedData) {
-                    var fs = require('fs');
-                    fs.writeFile(filePath, editedData, function (err) {
-                        if (err)
-                            throw err;
-                        if (applyConfig)
-                            applyConfig();
-                    });
-                }, function (content) {
-                    _this.clipboard.copyText(content, 'Copied text to clipboard');
-                });
-            });
-        });
-    };
-    ServerComponent.prototype.getItemAtIndex = function (index) {
-        return this.render(this.serverService.buffer[index]);
-    };
-    ServerComponent.prototype.getLength = function () {
-        return this.serverService.buffer.length;
-    };
-    ServerComponent.prototype.failoverUsageChanged = function () {
-        if (this.connectionWay == "failover") {
-            this.heat.switchToServer({ way: "remote", failoverEnabled: true, sameMessagingHost: false });
-        }
-        else if (this.connectionWay == "localhost") {
-            this.heat.switchToServer({ way: "local", failoverEnabled: false, sameMessagingHost: false });
-        }
-        this.settings["connectionWay"] = this.connectionWay;
-    };
-    ServerComponent.prototype.startServer = function () {
-        this.serverService.startServer();
-        this.$mdToast.show(this.$mdToast.simple().textContent("In some cases you need to Start the server A SECOND TIME!\n" +
-            "Wheter that's the case is indicated at the end of the log output (the colored text with black background).").hideDelay(10000));
-    };
-    ServerComponent.prototype.stopServer = function () {
-        this.serverService.stopServer();
-    };
-    ServerComponent.prototype.determineRowCount = function () {
-        var el = document.getElementById('server-console-container');
-        return el ? Math.round(el.clientHeight / this.ROW_HEIGHT) : 5;
-    };
-    ServerComponent.prototype.determineTopIndex = function () {
-        this.consoleRowCount = this.determineRowCount();
-        return Math.max(0, this.getLength() - this.consoleRowCount + 2);
-    };
-    ServerComponent.prototype.render = function (msg) {
-        if (angular.isUndefined(msg))
-            return msg;
-        if (angular.isUndefined(msg.rendered)) {
-            var match = this.msgRegExp.exec(msg);
-            msg.rendered = match ? { timestamp: match[1], severity: match[2], message: match[3] } : { message: msg };
-        }
-        return msg.rendered;
-    };
-    ServerComponent.prototype.startMining = function () {
-        var _this = this;
-        this.isUpdatingMiningInfo = true;
-        this.heat.api.startMining(this.user.secretPhrase).then(function (info) {
-            _this.updateMiningInfo();
-        }).catch(function (reason) {
-            _this.isUpdatingMiningInfo = false;
-        });
-    };
-    ServerComponent.prototype.stopMining = function () {
-        var _this = this;
-        this.isUpdatingMiningInfo = true;
-        this.heat.api.stopMining(this.user.secretPhrase).then(function (info) {
-            _this.updateMiningInfo();
-        }).catch(function (reason) {
-            _this.isUpdatingMiningInfo = false;
-        });
-    };
-    ServerComponent.prototype.updateMiningInfo = function () {
-        var _this = this;
-        if (this.user.unlocked) {
-            this.heat.api.getMiningInfo(this.user.secretPhrase).then(function (info) {
-                _this.isUpdatingMiningInfo = false;
-                _this.$scope.$evalAsync(function () {
-                    if (info[0]) {
-                        _this.isMining = true;
-                        _this.miningRemaining = info[0].remaining;
-                        var miningHittime = info[0].hitTime;
-                        var date = utils.timestampToDate(miningHittime);
-                        var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
-                        _this.miningHittime = dateFormat(date, format);
-                    }
-                    else {
-                        _this.isMining = false;
-                    }
-                });
-            }, function () {
-                _this.$scope.$evalAsync(function () {
-                    _this.isMining = false;
-                    _this.isUpdatingMiningInfo = false;
-                });
-            });
-        }
-    };
-    ServerComponent = __decorate([
-        RouteConfig('/server'),
-        Component({
-            selector: 'server',
-            template: "\n    <div layout=\"column\" flex layout-padding layout-fill>\n      <div layout=\"row\" class=\"button-row\">\n\n        <md-button class=\"start-stop\" ng-if=\"vm.isServerAvailable()\" ng-show=\"!vm.serverService.isRunning\" ng-click=\"vm.startServer()\">\n            Start Server</md-button>\n        <md-button class=\"start-stop md-primary\" ng-if=\"vm.isServerAvailable()\" ng-show=\"vm.serverService.isRunning\" ng-click=\"vm.stopServer()\">\n            Stop Server</md-button>\n\n        <md-menu md-position-mode=\"target-right target\" md-offset=\"34px 0px\">\n          <md-button style=\"margin-top: 5px; margin-right: 20px;\" aria-label=\"signout\" class=\"md-icon-button\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n            <i><img src=\"assets/sandwich.png\"></i>\n          </md-button>\n          <md-menu-content>\n            <md-menu-item>\n              <md-button class=\"start-stop\" ng-click=\"vm.showInstallFolder()\">\n                <md-tooltip md-direction=\"bottom\">Access your server config files and back them up before updating HEAT server</md-tooltip>\n                <span>Install Dir</span>\n              </md-button>\n            </md-menu-item>\n            <md-menu-item>\n              <md-button class=\"start-stop\" ng-click=\"vm.showUserDataFolder()\">\n                <md-tooltip md-direction=\"bottom\">Access your user profile</md-tooltip>\n                <span>User Dir</span>\n              </md-button>\n            </md-menu-item>\n            <md-menu-item>\n              <md-button ng-click=\"vm.editHeatwalletConfig()\">\n                <md-tooltip md-direction=\"bottom\">Edit application config</md-tooltip>\n                <span>Data sources config</span>\n              </md-button>\n            </md-menu-item>\n            <md-menu-item>\n              <md-button ng-click=\"vm.editHeatledgerConfig()\">\n                <md-tooltip md-direction=\"bottom\">Edit embedded Heatledger server config</md-tooltip>\n                <span>Server config</span>\n              </md-button>\n            </md-menu-item>\n          </md-menu-content>\n        </md-menu>\n\n        <label id=\"failoverUsage\" style=\"margin-left: 11px; margin-right: 9px\">Client API data from:</label>\n        <md-radio-group ng-model=\"vm.connectionWay\" aria-labelledby=\"failoverUsage\" ng-change=\"vm.failoverUsageChanged()\">\n          <md-radio-button value=\"failover\" class=\"md-primary\" style=\"margin-bottom: 7px\">Best server (use failover feature)</md-radio-button>\n          <md-radio-button value=\"localhost\" style=\"margin-bottom: 7px\">Localhost (ignore failover feature)</md-radio-button>\n        </md-radio-group>\n\n        <!--<md-switch ng-model=\"vm.connectedToLocalhost\" aria-label=\"Choose API connection\" ng-change=\"vm.connectToLocalhostChanged()\">\n          <md-tooltip md-direction=\"top\">\n            Connect client API to remotehost or to your local machine\n          </md-tooltip>\n          Client API connected to {{ vm.connectedToLocalhost ? 'localhost' : vm.remotehostDisplay }}\n        </md-switch>-->\n\n        <span flex></span>\n        <div ng-show=\"vm.isMining\" layout=\"row\" layout-align=\"center center\" class=\"mining-stats\">\n          <span>Estimated hit time: </span>\n          <span class=\"mining-stats-val\">{{vm.miningHittime}}</span>\n          <span>({{vm.miningRemaining}} sec)</span>\n        </div>\n        <md-button ng-show=\"vm.user.unlocked && !vm.isMining && !vm.isUpdatingMiningInfo\" ng-disabled=\"!vm.serverService.isReady\" class=\"start-stop\" ng-click=\"vm.startMining()\">Start Mining</md-button>\n        <md-button ng-show=\"vm.user.unlocked && vm.isMining && !vm.isUpdatingMiningInfo\" ng-disabled=\"!vm.serverService.isReady\" class=\"start-stop md-primary\" ng-click=\"vm.stopMining()\">Stop Mining</md-button>\n        <span ng-if=\"vm.user.unlocked && vm.isUpdatingMiningInfo\">Updating Mining Info...</span>\n        <a ng-if=\"vm.isServerAvailable()\" ng-show=\"!vm.user.unlocked\" class=\"start-stop\" href=\"#/login\">Sign in to start mining</a>\n      </div>\n      <div layout=\"column\" flex class=\"console\" layout-fill>\n        <md-virtual-repeat-container md-top-index=\"vm.topIndex\" flex layout-fill layout=\"column\"\n            virtual-repeat-flex-helper id=\"server-console-container\">\n          <pre md-virtual-repeat=\"item in vm\" md-on-demand aria-label=\"Entry\">\n            <span ng-if=\"!item.timestamp\">{{item.message}}</span>\n            <span ng-if=\"item.timestamp\">\n              <span class=\"date\">{{item.timestamp}}&nbsp;<span class=\"severity {{item.severity}}\">{{item.severity}}</span>&nbsp;<span class=\"message\">{{item.message}}</span>\n            </span>\n          </pre>\n        </md-virtual-repeat-container>\n      </div>\n    </div>\n  "
-        }),
-        Inject('$scope', 'server', 'heat', 'user', 'settings', '$mdToast', 'clipboard'),
-        __metadata("design:paramtypes", [Object, ServerService,
-            HeatService,
-            UserService,
-            SettingsService, Object, ClipboardService])
-    ], ServerComponent);
-    return ServerComponent;
 }());
 function createARDRAccount($event, walletComponent) {
     var walletEntries = walletComponent.walletEntries;
@@ -24984,6 +25004,7 @@ var AbstractDialogField = (function () {
     }
     AbstractDialogField.prototype.setValue = function (value) {
         this.value = value;
+        return this;
     };
     AbstractDialogField.prototype.changed = function (force) {
         var _this = this;
@@ -26495,4 +26516,4 @@ var ArdorTradesProvider = (function () {
     return ArdorTradesProvider;
 }());
 
-//# sourceMappingURL=../dist/maps/heat-ui-KFQgnf.js.map
+//# sourceMappingURL=../dist/maps/heat-ui-CWXCt7.js.map
