@@ -67,8 +67,10 @@ var heat;
                         if (usingServer) {
                             if (Date.now() - startMoment < 5000) {
                                 setTimeout(function () {
-                                    sessionStorage.setItem(heat.serverDescriptionKey, JSON.stringify(usingServer));
-                                    window.location.reload();
+                                    if (!utils.isBaseDate()) {
+                                        sessionStorage.setItem(heat.serverDescriptionKey, JSON.stringify(usingServer));
+                                        window.location.reload();
+                                    }
                                 }, 300);
                             }
                         }
@@ -10340,7 +10342,7 @@ var SettingsService = (function () {
         this.env = env;
         this.http = http;
         this.VERSION = "4.5.2";
-        this.BUILD = "2025-01-24";
+        this.BUILD = "2025-02-05";
         this.failoverEnabled = true;
         this.settings = {};
         this.applyFailoverConfig();
@@ -10582,8 +10584,8 @@ var SettingsService = (function () {
         });
     };
     var SettingsService_1;
-    SettingsService.EMBEDDED_HEATLEDGER_VERSION = "4.4.1";
-    SettingsService.EMBEDDED_HEATLEDGER_BUILD_DATE = "2024-12-19";
+    SettingsService.EMBEDDED_HEATLEDGER_VERSION = "4.4.2";
+    SettingsService.EMBEDDED_HEATLEDGER_BUILD_DATE = "2025-01-28";
     SettingsService.DATEFORMAT_DEFAULT = 'settings.dateformat_default';
     SettingsService.TIMEFORMAT_DEFAULT = 'settings.timeformat_default';
     SettingsService.APPLICATION_NAME = 'settings.application_name';
@@ -12506,6 +12508,1009 @@ var NewComponent = (function () {
     ], NewComponent);
     return NewComponent;
 }());
+var heat;
+(function (heat) {
+    var bundle;
+    (function (bundle_1) {
+        var MAGIC = 2147483647;
+        var KEY_STORE_SEED = MAGIC - 1;
+        var ASSET_PROPERTIES_SEED = MAGIC - 2;
+        function createKeyStore(bundle) {
+            var buffer = new ByteBuffer(ByteBuffer.DEFAULT_CAPACITY, true);
+            buffer.writeInt32(KEY_STORE_SEED);
+            var nameBytes = converters.stringToByteArray(bundle.name);
+            buffer.writeShort(nameBytes.length);
+            nameBytes.forEach(function (b) { buffer.writeByte(b); });
+            var valueBytes = converters.stringToByteArray(bundle.value);
+            valueBytes.forEach(function (b) { buffer.writeByte(b); });
+            buffer.flip();
+            return buffer.toHex();
+        }
+        bundle_1.createKeyStore = createKeyStore;
+        function createAssetProperties(bundle) {
+            var buffer = new ByteBuffer(ByteBuffer.DEFAULT_CAPACITY, true);
+            buffer.writeInt32(ASSET_PROPERTIES_SEED);
+            buffer.writeInt64(Long.fromString(bundle.asset, true));
+            buffer.writeInt32(bundle.protocol);
+            var valueBytes = converters.stringToByteArray(bundle.value);
+            buffer.writeShort(valueBytes.length);
+            valueBytes.forEach(function (b) { buffer.writeByte(b); });
+            buffer.flip();
+            return buffer.toHex();
+        }
+        bundle_1.createAssetProperties = createAssetProperties;
+    })(bundle = heat.bundle || (heat.bundle = {}));
+})(heat || (heat = {}));
+var HeatAPI = (function () {
+    function HeatAPI(heat, user, $q) {
+        this.heat = heat;
+        this.user = user;
+        this.$q = $q;
+    }
+    HeatAPI.prototype.registerAccountName = function (publicKey, captcha, name, isprivate, signature) {
+        return this.heat.get("/register/now/".concat(publicKey, "/").concat(captcha, "/").concat(name, "/").concat(isprivate, "/").concat(signature), 'value');
+    };
+    HeatAPI.prototype.getBlockchainStatus = function () {
+        return this.heat.get('/blockchain/status');
+    };
+    HeatAPI.prototype.getServerHealth = function (host, port) {
+        if (!host)
+            return this.heat.get('/tools/telemetry/health');
+        return this.heat.getRaw(host, port, '/tools/telemetry/health', null, false);
+    };
+    HeatAPI.prototype.getBlocks = function (from, to) {
+        return this.heat.get("/blockchain/blocks/".concat(from, "/").concat(to, "/null"));
+    };
+    HeatAPI.prototype.getBlock = function (numericId, includeTransactions) {
+        if (includeTransactions === void 0) { includeTransactions = true; }
+        return this.heat.get("/blockchain/block/".concat(numericId, "/").concat(includeTransactions));
+    };
+    HeatAPI.prototype.getBlockAtHeight = function (height, includeTransactions) {
+        return this.heat.get("/blockchain/block/height/".concat(height, "/").concat(includeTransactions));
+    };
+    HeatAPI.prototype.getAccountBlocks = function (account, from, to) {
+        return this.heat.get("/blockchain/blocks/account/".concat(account, "/").concat(from, "/").concat(to, "/null"));
+    };
+    HeatAPI.prototype.getAccountBlocksCount = function (account) {
+        return this.heat.get("/blockchain/blocks/account/count/".concat(account), "count");
+    };
+    HeatAPI.prototype.getPublicKey = function (account, ignoreErrorResponse) {
+        var deferred = this.$q.defer();
+        this.heat.get("/account/publickey/".concat(account), "value", ignoreErrorResponse).then(function (publicKey) {
+            if (!publicKey) {
+                deferred.resolve(null);
+                return;
+            }
+            var test = heat.crypto.getAccountIdFromPublicKey(publicKey);
+            if (test != account) {
+                console.log("Public key returned from server does not match account");
+                deferred.reject();
+            }
+            else {
+                deferred.resolve(publicKey);
+            }
+        }, deferred.reject);
+        return deferred.promise;
+    };
+    HeatAPI.prototype.getPublicKeyOrEmptyString = function (account) {
+        var deferred = this.$q.defer();
+        this.heat.get("/account/publickey/".concat(account), "value").then(function (publicKey) {
+            var test = heat.crypto.getAccountIdFromPublicKey(publicKey);
+            if (test != account) {
+                console.log("Public key returned from server does not match account");
+                deferred.reject();
+            }
+            else {
+                deferred.resolve(publicKey);
+            }
+        }, function (error) {
+            if ((error.errorDescription || "").toLowerCase() == "unknown publickey") {
+                deferred.resolve("");
+            }
+            else {
+                deferred.reject();
+            }
+        });
+        return deferred.promise;
+    };
+    HeatAPI.prototype.createTransaction = function (input) {
+        console.log("CreateTransaction", input);
+        var arg = { value: JSON.stringify(input) };
+        return this.heat.post('/tx/create', arg);
+    };
+    HeatAPI.prototype.broadcast = function (param) {
+        var arg = {};
+        if (angular.isDefined(param.transactionJSON)) {
+            arg['transactionJSON'] = JSON.stringify(param.transactionJSON);
+        }
+        if (angular.isDefined(param.transactionBytes)) {
+            arg['transactionBytes'] = param.transactionBytes;
+        }
+        return this.heat.post('/tx/broadcast', arg);
+    };
+    HeatAPI.prototype.getAllAssetProtocol1 = function (from, to) {
+        return this.heat.get("/exchange/assets/protocol1/".concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAssetProtocol1 = function (symbol) {
+        return this.heat.get("/exchange/asset/protocol1/".concat(symbol));
+    };
+    HeatAPI.prototype.getAsset = function (asset, propertiesAccount, propertiesProtocol) {
+        return this.heat.get("/exchange/asset/properties/".concat(asset, "/").concat(propertiesAccount, "/").concat(propertiesProtocol));
+    };
+    HeatAPI.prototype.getAssetCertification = function (asset, certifierAccount) {
+        return this.heat.get("/exchange/asset/certification/".concat(asset, "/").concat(certifierAccount));
+    };
+    HeatAPI.prototype.getAssets = function (propertiesAccount, propertiesProtocol, from, to) {
+        return this.heat.get("/assets/".concat(propertiesAccount, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAssetProperties = function (asset, propertiesAccount, propertiesProtocol) {
+        return this.heat.get("/exchange/asset/properties/".concat(asset, "/").concat(propertiesAccount, "/").concat(propertiesProtocol));
+    };
+    HeatAPI.prototype.getAccountPairOrders = function (account, currency, asset, from, to) {
+        return this.heat.get("/order/account/pair/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAccountPairOrdersCount = function (account, currency, asset) {
+        return this.heat.get("/order/account/pair/count/".concat(account, "/").concat(currency, "/").concat(asset), "count");
+    };
+    HeatAPI.prototype.getAccountAllOrders = function (account, from, to) {
+        return this.heat.get("/order/account/all/".concat(account, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAccountAllOrdersCount = function (account) {
+        return this.heat.get("/order/account/all/count/".concat(account), "count");
+    };
+    HeatAPI.prototype.getAskOrders = function (currency, asset, from, to) {
+        return this.heat.get("/order/pair/asks/".concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAskOrdersCount = function (currency, asset) {
+        return this.heat.get("/order/pair/asks/count/".concat(currency, "/").concat(asset), "count");
+    };
+    HeatAPI.prototype.getBidOrders = function (currency, asset, from, to) {
+        return this.heat.get("/order/pair/bids/".concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getBidOrdersCount = function (currency, asset) {
+        return this.heat.get("/order/pair/bids/count/".concat(currency, "/").concat(asset), "count");
+    };
+    HeatAPI.prototype.getAllAskOrders = function (from, to) {
+        return this.heat.get("/order/asks/".concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAllBidOrders = function (from, to) {
+        return this.heat.get("/order/bids/".concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAccountAskOrders = function (account, currency, asset, from, to) {
+        return this.heat.get("/order/account/pair/asks/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAccountBidOrders = function (account, currency, asset, from, to) {
+        return this.heat.get("/order/account/pair/bids/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getTrades = function (currency, asset, from, to) {
+        return this.heat.get("/trade/".concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getTradesCount = function (currency, asset) {
+        return this.heat.get("/trade/count/".concat(currency, "/").concat(asset), "count");
+    };
+    HeatAPI.prototype.getAllTrades = function (from, to) {
+        return this.heat.get("/trade/all/".concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAllAccountTrades = function (account, propertiesAccount, propertiesProtocol, from, to) {
+        return this.heat.get("/trade/account/".concat(account, "/").concat(propertiesAccount, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAllAccountTradesCount = function (account) {
+        return this.heat.get("/trade/account/count/".concat(account), "count");
+    };
+    HeatAPI.prototype.getAccountTrades = function (account, currency, asset, from, to) {
+        return this.heat.get("/trade/account/pair/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getAccountTradesCount = function (account, currency, asset) {
+        return this.heat.get("/trade/account/pair/count/".concat(account, "/").concat(currency, "/").concat(asset), "count");
+    };
+    HeatAPI.prototype.getAccountBalance = function (account, asset) {
+        return this.heat.get("/account/balance/".concat(account, "/").concat(asset));
+    };
+    HeatAPI.prototype.getAccountBalanceVirtual = function (account, asset, propertiesAccount, propertiesProtocol) {
+        return this.heat.get("/account/balance/virtual/".concat(account, "/").concat(asset, "/").concat(propertiesAccount, "/").concat(propertiesProtocol));
+    };
+    HeatAPI.prototype.getMarketsAll = function (sort, asc, propertiesAccountId, propertiesProtocol, from, to) {
+        return this.heat.get("/exchange/markets/all/".concat(sort, "/").concat(asc, "/").concat(propertiesAccountId, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getMarkets = function (currency, sort, asc, propertiesAccountId, propertiesProtocol, from, to) {
+        return this.heat.get("/exchange/markets/".concat(currency, "/").concat(sort, "/").concat(asc, "/").concat(propertiesAccountId, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getMarket = function (currency, asset, propertiesAccountId, propertiesProtocol) {
+        return this.heat.get("/exchange/market/".concat(currency, "/").concat(asset, "/").concat(propertiesAccountId, "/").concat(propertiesProtocol));
+    };
+    HeatAPI.prototype.getAccountBalances = function (account, propertiesAccount, propertiesProtocol, from, to) {
+        return this.heat.get("/account/balances/".concat(account, "/").concat(propertiesAccount, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getPayments = function (account, currency, sort, asc, from, to) {
+        return this.heat.get("/account/payments/".concat(account, "/").concat(currency, "/").concat(sort, "/").concat(asc, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getPaymentsCount = function (account, currency) {
+        return this.heat.get("/account/payments/count/".concat(account, "/").concat(currency), "count");
+    };
+    HeatAPI.prototype.getMessagingContactMessagesCount = function (accountA, accountB) {
+        return this.heat.get("/messages/contact/count/".concat(accountA, "/").concat(accountB), "count");
+    };
+    HeatAPI.prototype.getMessagingContactMessages = function (accountA, accountB, from, to) {
+        return this.heat.get("/messages/contact/".concat(accountA, "/").concat(accountB, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getMessagingContactMessagesByTimestampRange = function (accountA, accountB, fromTimestamp, toTimestamp) {
+        return this.heat.get("/messages/contacttimestamprange/".concat(accountA, "/").concat(accountB, "/").concat(fromTimestamp, "/").concat(toTimestamp));
+    };
+    HeatAPI.prototype.getMessagingContacts = function (account, from, to) {
+        return this.heat.get("/messages/latest/".concat(account, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getOHLCChartData = function (currency, asset, window) {
+        return this.heat.get("/exchange/chartdata/".concat(currency, "/").concat(asset, "/").concat(window));
+    };
+    HeatAPI.prototype.getMiningInfo = function (secretPhrase) {
+        return this.heat.post('/mining/info?api_key=secret', { secretPhrase: secretPhrase }, false, null, true);
+    };
+    HeatAPI.prototype.startMining = function (secretPhrase) {
+        return this.heat.post('/mining/start?api_key=secret', { secretPhrase: secretPhrase }, false, null, true);
+    };
+    HeatAPI.prototype.stopMining = function (secretPhrase) {
+        return this.heat.post('/mining/stop?api_key=secret', { secretPhrase: secretPhrase }, false, null, true);
+    };
+    HeatAPI.prototype.getAccountByNumericId = function (numericId, ignoreErrorResponse) {
+        return this.heat.get("/account/find/".concat(numericId), null, ignoreErrorResponse);
+    };
+    HeatAPI.prototype.findAccountByName = function (name, ignoreErrorResponse) {
+        return this.heat.get("/account/find/name/".concat(name), null, ignoreErrorResponse);
+    };
+    HeatAPI.prototype.getTransaction = function (transaction) {
+        return this.heat.get("/blockchain/transaction/".concat(transaction));
+    };
+    HeatAPI.prototype.getTransactionsForAccount = function (account, from, to) {
+        return this.heat.get("/blockchain/transactions/account/".concat(account, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getTransactionsForAccountCount = function (account) {
+        return this.heat.get("/blockchain/transactions/account/count/".concat(account), "count");
+    };
+    HeatAPI.prototype.getTransactionsForBlock = function (block, from, to) {
+        return this.heat.get("/blockchain/transactions/block/".concat(block, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getTransactionsForBlockCount = function (block) {
+        return this.heat.get("/blockchain/transactions/block/count/".concat(block), "count");
+    };
+    HeatAPI.prototype.getTransactionsFromTo = function (sender, recipient, from, to) {
+        return this.heat.get("/blockchain/transactions/list/".concat(sender, "/").concat(recipient, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getTransactionsForAll = function (from, to) {
+        return this.heat.get("/blockchain/transactions/all/".concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.getTransactionsForAllCount = function () {
+        return this.heat.get("/blockchain/transactions/all/count", "count");
+    };
+    HeatAPI.prototype.searchAccounts = function (query, from, to) {
+        return this.heat.get("/search/accounts/".concat(query, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.searchAccountsCount = function (query) {
+        return this.heat.get("/search/accounts/count/".concat(query), "count");
+    };
+    HeatAPI.prototype.searchPublicNames = function (query, from, to, ignoreErrorResponse) {
+        return this.heat.get("/account/search/0/".concat(query, "/").concat(from, "/").concat(to), null, ignoreErrorResponse);
+    };
+    HeatAPI.prototype.rewardsAccount = function (account) {
+        return this.heat.get("/mining/rewards/account/".concat(account));
+    };
+    HeatAPI.prototype.rewardsList = function (from, to) {
+        return this.heat.get("/mining/rewards/list/".concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.rewardsListCount = function () {
+        return this.heat.get('/mining/rewards/list/count', 'count');
+    };
+    HeatAPI.prototype.getKeystoreEntryCountByAccount = function (account) {
+        return this.heat.get("/keystore/count/".concat(account), 'count');
+    };
+    HeatAPI.prototype.getKeystoreAccountEntry = function (account, key) {
+        return this.heat.get("/keystore/get/".concat(account, "/").concat(key));
+    };
+    HeatAPI.prototype.getKeystoreAccountEntryExt = function (account, keys) {
+        return this.heat.get("/keystore/getExt/".concat(account, "/").concat(keys));
+    };
+    HeatAPI.prototype.listKeystoreAccountEntries = function (account, from, to) {
+        return this.heat.get("/keystore/list/".concat(account, "/").concat(from, "/").concat(to));
+    };
+    HeatAPI.prototype.saveKeystoreEntry = function (key, value, secretPhrase) {
+        return this.heat.post("/keystore/put", { key: key, value: value, fee: 1000000, deadline: 1440, secretPhrase: secretPhrase });
+    };
+    HeatAPI.prototype.listMasternodes = function () {
+        return this.heat.get("/account/internetaddress/list");
+    };
+    HeatAPI.prototype.baseTimestamp = function () {
+        return this.heat.get('/blockchain/basetimestamp');
+    };
+    HeatAPI.prototype.uploadFile = function (fileName, arrayBuffer) {
+        return this.heat.post('/messaging/file/upload', {
+            fileName: fileName,
+            arrayBuffer: arrayBuffer
+        }, undefined, undefined, undefined, true, this.heat.settings.get(SettingsService.HEAT_MESSAGING));
+    };
+    HeatAPI.prototype.downloadFile = function (fileName) {
+        return this.heat.get("/messaging/file/download/".concat(fileName), undefined, undefined, true, this.heat.settings.get(SettingsService.HEAT_MESSAGING));
+    };
+    HeatAPI.fee = {
+        standard: utils.convertToQNT('0.01'),
+        assetIssue: utils.convertToQNT('500.00'),
+        assetIssueMore: utils.convertToQNT('0.01'),
+        whitelistAssetAccount: utils.convertToQNT('100.00'),
+        assetAssignFee: utils.convertToQNT('0.1'),
+        assetAssignExpiration: utils.convertToQNT('0.01'),
+        whitelistMarket: utils.convertToQNT('10.00'),
+        registerInternetAddressFee: utils.convertToQNT('100.00'),
+        supervisoryAccountFee: utils.convertToQNT('0.01'),
+        accountAssetLimitFee: utils.convertToQNT('0.01')
+    };
+    return HeatAPI;
+}());
+var ServerEngineError = (function () {
+    function ServerEngineError(data) {
+        this.data = data;
+        if (angular.isObject(data)) {
+            this.description = data['errorDescription'] || data['error'];
+            this.code = data['errorCode'] || -1;
+        }
+        else {
+            this.description = 'misc error';
+            this.code = 99;
+        }
+    }
+    return ServerEngineError;
+}());
+var InternalServerTimeoutError = (function (_super) {
+    __extends(InternalServerTimeoutError, _super);
+    function InternalServerTimeoutError() {
+        return _super.call(this, { error: 'Internal timeout' }) || this;
+    }
+    return InternalServerTimeoutError;
+}(ServerEngineError));
+var HeatService = (function () {
+    function HeatService($q, $http, settings, user, $timeout, $interval, env, $rootScope) {
+        var _this = this;
+        this.$q = $q;
+        this.$http = $http;
+        this.settings = settings;
+        this.user = user;
+        this.$timeout = $timeout;
+        this.$interval = $interval;
+        this.env = env;
+        this.$rootScope = $rootScope;
+        this.api = new HeatAPI(this, this.user, this.$q);
+        this.subscriber = this.createSubscriber(this.settings.get(SettingsService.HEAT_WEBSOCKET));
+        var initBaseTime = function () { return _this.api.baseTimestamp().then(function (basetimestamp) {
+            utils.setBaseTimestamp(parseInt(basetimestamp));
+        }); };
+        this.settings.initialized.then(function (v) { return initBaseTime(); })
+            .catch(function (reason) { return console.error(reason); });
+        $rootScope.$on('HEAT_SERVER_LOCATION', function (event, nothing) {
+            initBaseTime().catch(function (reason) { return console.error(reason); });
+        });
+        var refreshInterval = $interval(function () {
+            if (utils.isBaseDate()) {
+                $interval.cancel(refreshInterval);
+            }
+            else {
+                initBaseTime().catch(function (reason) { return console.error(reason); });
+            }
+        }, 3 * 1000, 0, false);
+    }
+    HeatService.prototype.createSubscriber = function (url) {
+        return new HeatSubscriber(url, this.$q, this.$timeout);
+    };
+    HeatService.prototype.resetSubscriber = function () {
+        this.subscriber.reset(this.settings.get(SettingsService.HEAT_WEBSOCKET));
+    };
+    HeatService.prototype.switchToServer = function (connectionWay, serverDescriptor) {
+        if (connectionWay)
+            this.settings.setConnectionWay(connectionWay);
+        if (serverDescriptor)
+            this.settings.setCurrentServer(serverDescriptor);
+        this.resetSubscriber();
+        this.$rootScope.$emit('HEAT_SERVER_LOCATION', "nothing");
+    };
+    HeatService.prototype.getAuthData = function () {
+        var timestamp = Date.now();
+        var baseMessage = this.user.account + timestamp;
+        var message = converters.stringToHexString(baseMessage);
+        var secret = converters.stringToHexString(this.user.secretPhrase);
+        var signature = heat.crypto.signBytes(message, secret);
+        return {
+            auth: {
+                accountRS: this.user.account,
+                timestamp: timestamp,
+                signature: signature,
+                publicKey: this.user.publicKey
+            }
+        };
+    };
+    HeatService.prototype.get = function (route, returns, ignoreErrorResponse, isFile, hostPort) {
+        if (ignoreErrorResponse === void 0) { ignoreErrorResponse = false; }
+        return this.getRaw(hostPort ? hostPort.host : this.settings.get(SettingsService.HEAT_HOST), hostPort ? hostPort.port : this.settings.get(SettingsService.HEAT_PORT), route, returns, ignoreErrorResponse, isFile);
+    };
+    HeatService.prototype.getRaw = function (host, port, route, returns, ignoreErrorResponse, isFile) {
+        var _this = this;
+        route = "api/v1" + route;
+        var deferred = this.$q.defer();
+        if (this.env.type == EnvType.BROWSER) {
+            var portStr = port ? ":".concat(port) : "";
+            var config = void 0;
+            if (isFile) {
+                config = {
+                    headers: { 'Content-Type': undefined },
+                    transformResponse: [
+                        function (data) {
+                            return data;
+                        }
+                    ],
+                    responseType: "arraybuffer"
+                };
+            }
+            else {
+                config = {
+                    headers: { 'Content-Type': 'application/json' }
+                };
+            }
+            this.browserHttpGet([host, portStr, '/', route].join(''), config, function (response) {
+                _this.logResponse(route, null, response);
+                var data = angular.isString(returns) ? response.data[returns] : response.data;
+                deferred.resolve(data);
+            }, function (response) {
+                if (ignoreErrorResponse) {
+                    deferred.resolve();
+                }
+                else {
+                    _this.logErrorResponse(route, null, response);
+                    deferred.reject(new ServerEngineError(isFile ? response : response.data));
+                }
+            });
+        }
+        else if (this.env.type == EnvType.NODEJS) {
+            var isHttps = host.indexOf('https://') == 0;
+            this.nodeHttpGet(isHttps, host.replace(/^(\w+:\/\/)/, ''), port, '/' + route, function (response) {
+                _this.logResponse(route, null, response);
+                var data = angular.isString(returns) ? response[returns] : response;
+                deferred.resolve(data);
+            }, function (response) {
+                if (ignoreErrorResponse) {
+                    deferred.resolve();
+                }
+                else {
+                    _this.logErrorResponse(route, null, response);
+                    var data = Object.assign(response, { host: host, port: port, route: route, response: response });
+                    deferred.reject(new ServerEngineError(data));
+                }
+            }, isFile);
+        }
+        return deferred.promise;
+    };
+    HeatService.prototype.browserHttpGet = function (url, config, onSuccess, onFailure) {
+        this.$http.get(url, config).then(function (response) {
+            if (angular.isDefined(response.data.errorDescription)) {
+                onFailure(response);
+            }
+            else {
+                onSuccess(response);
+            }
+        }, function (response) { onFailure(response); });
+    };
+    HeatService.prototype.nodeHttpGet = function (isHttps, hostname, port, path, onSuccess, onFailure, isFile) {
+        var options = {
+            hostname: hostname, port: port, path: path, method: 'GET',
+            headers: {
+                'Content-Type': isFile ? 'multipart/form-data' : 'application/json'
+            }
+        };
+        var http = require(isHttps ? 'https' : 'http');
+        var req = http.request(options, function (res) {
+            if (isFile) {
+                if (res.statusCode == 200) {
+                    var chunkArray_1 = [];
+                    res.on('data', function (chunk) { return chunkArray_1.push(chunk); });
+                    res.on('end', function () {
+                        onSuccess(Buffer.concat(chunkArray_1));
+                    });
+                }
+                else {
+                    onFailure(res.statusMessage || res);
+                }
+            }
+            else {
+                res.setEncoding('utf8');
+                var body_1 = [];
+                res.on('data', function (chunk) { body_1.push(chunk); });
+                res.on('end', function () {
+                    var response;
+                    var content = body_1.join('');
+                    try {
+                        response = JSON.parse(content);
+                        if (angular.isDefined(response.errorDescription)) {
+                            onFailure(response);
+                        }
+                        else {
+                            onSuccess(response);
+                        }
+                    }
+                    catch (e) {
+                        console.error("response in not JSON parseable: \n" + content);
+                        onFailure(content);
+                    }
+                });
+            }
+        });
+        req.on('error', function (e) { onFailure(e); });
+        req.end();
+    };
+    HeatService.prototype.post = function (route, request, withAuth, returns, localHostOnly, isFile, hostPort) {
+        var host;
+        var port;
+        if (hostPort) {
+            host = hostPort.host;
+            port = hostPort.port;
+        }
+        else {
+            host = localHostOnly ? this.settings.get(SettingsService.HEAT_HOST_LOCAL) : this.settings.get(SettingsService.HEAT_HOST);
+            port = localHostOnly ? this.settings.get(SettingsService.HEAT_PORT_LOCAL) : this.settings.get(SettingsService.HEAT_PORT);
+        }
+        return this.postRaw(host, port, route, request, withAuth, returns, localHostOnly, isFile);
+    };
+    HeatService.prototype.postRaw = function (host, port, route, request, withAuth, returns, localHostOnly, isFile) {
+        var _this = this;
+        route = "api/v1" + route;
+        var deferred = this.$q.defer();
+        var req = request || {};
+        if (withAuth) {
+            req = angular.extend(req, this.getAuthData());
+        }
+        if (this.env.isBrowser()) {
+            var portStr = port ? ":".concat(port) : "";
+            var address = [host, portStr, '/', route].join('');
+            if (localHostOnly) {
+                if (address.indexOf('http://localhost') != 0) {
+                    deferred.reject(new ServerEngineError({
+                        errorDescription: "Operation allowed to localhost only! ".concat(address, " is not allowed"),
+                        errorCode: 10
+                    }));
+                }
+            }
+            this.browserHttpPost(address, req, function (response) {
+                _this.logResponse(route, request, response);
+                var data = angular.isString(response)
+                    ? response
+                    : (angular.isString(returns) ? response.data[returns] : response.data);
+                deferred.resolve(data);
+            }, function (response) {
+                _this.logErrorResponse(route, request, response);
+                deferred.reject(new ServerEngineError(response.data));
+            }, isFile);
+        }
+        else if (this.env.type == EnvType.NODEJS) {
+            var address = host.replace(/^(\w+:\/\/)/, '');
+            if (localHostOnly) {
+                if (address.indexOf('localhost') != 0) {
+                    deferred.reject(new ServerEngineError({
+                        errorDescription: "Operation allowed to localhost only ".concat(address, " is not allowed"),
+                        errorCode: 10
+                    }));
+                }
+            }
+            var isHttps = host.indexOf('https://') == 0;
+            this.nodeHttpPost(isHttps, address, port, '/' + route, req, function (response) {
+                _this.logResponse(route, request, response);
+                var data = angular.isString(response)
+                    ? response
+                    : (angular.isString(returns) ? response.data[returns] : response.data);
+                deferred.resolve(data);
+            }, function (response) {
+                _this.logErrorResponse(route, request, response);
+                deferred.reject(new ServerEngineError(response.data));
+            }, isFile);
+        }
+        return deferred.promise;
+    };
+    HeatService.prototype.browserHttpPost = function (url, request, onSuccess, onFailure, isFile) {
+        var config;
+        if (isFile) {
+            var formData = new FormData();
+            formData.append("fileName", request.fileName);
+            formData.append("file", new Blob([request.arrayBuffer]));
+            config = {
+                method: 'POST',
+                url: url,
+                headers: { 'Content-Type': undefined },
+                data: formData
+            };
+        }
+        else {
+            config = {
+                method: 'POST',
+                url: url,
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                data: request,
+                transformRequest: function (obj) {
+                    var str = [];
+                    for (var p in obj) {
+                        str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
+                    }
+                    return str.join("&");
+                }
+            };
+        }
+        this.$http(config).then(function (response) {
+            if (angular.isDefined(response.data.errorDescription)) {
+                onFailure(response);
+            }
+            else {
+                onSuccess(response);
+            }
+        }, function (response) { onFailure(response); });
+    };
+    HeatService.prototype.nodeHttpPost = function (isHttps, hostname, port, path, request, onSuccess, onFailure, isFile) {
+        var http = require(isHttps ? 'https' : 'http');
+        if (isFile) {
+            var FormData_1 = require("form-data");
+            var form = new FormData_1();
+            form.append('fileName', request.fileName);
+            form.append('file', Buffer.from(request.arrayBuffer));
+            var req = http.request({
+                hostname: hostname, port: port, path: path, method: 'POST',
+                headers: form.getHeaders(),
+            }, function (response) {
+                if ((response === null || response === void 0 ? void 0 : response.statusCode) == 200) {
+                    onSuccess(response.statusMessage);
+                }
+                else {
+                    onFailure(response);
+                }
+            });
+            req.on('error', function (e) { onFailure(e); });
+            form.pipe(req);
+        }
+        else {
+            var querystring = require('querystring');
+            var body = querystring.stringify(request);
+            var options = {
+                hostname: hostname, port: port, path: path, method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    "Content-Length": body.length
+                }
+            };
+            var req = http.request(options, function (res) {
+                res.setEncoding('utf8');
+                var respBody = [];
+                res.on('data', function (chunk) { respBody.push(chunk); });
+                res.on('end', function () {
+                    var responseBody;
+                    try {
+                        responseBody = JSON.parse(respBody.join(''));
+                    }
+                    catch (e) {
+                        console.error(e);
+                        onFailure(res);
+                    }
+                    var response = { data: responseBody };
+                    if (angular.isDefined(response.data.errorDescription)) {
+                        onFailure(response);
+                    }
+                    else {
+                        onSuccess(response);
+                    }
+                });
+            });
+            req.on('error', function (e) { onFailure(e); });
+            req.write(body);
+            req.end();
+        }
+    };
+    HeatService.prototype.logResponse = function (route, request, response) {
+        if (this.settings.get(SettingsService.LOG_HEAT_ALL)) {
+            console.log("HEAT [".concat(route, "]"), {
+                request: request,
+                response: response
+            });
+        }
+    };
+    HeatService.prototype.logErrorResponse = function (route, request, response) {
+        if (this.settings.get(SettingsService.LOG_HEAT_ERRORS)) {
+            console.error("HEAT [".concat(route, "]"), {
+                request: request,
+                response: response
+            });
+        }
+    };
+    HeatService.prototype.mock = function (data) {
+        var deferred = this.$q.defer();
+        deferred.resolve(data);
+        return deferred.promise;
+    };
+    HeatService.prototype.getHeatMessageContents = function (message) {
+        try {
+            if (message.messageIsEncrypted || message.messageIsEncryptedToSelf) {
+                var byteArray = converters.hexStringToByteArray(message.messageBytes);
+                var nonce = converters.byteArrayToHexString(byteArray.slice(0, 32));
+                var data = converters.byteArrayToHexString(byteArray.slice(32));
+                if (message.recipient == this.user.account || (message.recipient == '0' && message.sender == this.user.account)) {
+                    return heat.crypto.decryptMessage(data, nonce, message.senderPublicKey, this.user.secretPhrase);
+                }
+                else if (message.sender == this.user.account) {
+                    return heat.crypto.decryptMessage(data, nonce, message.recipientPublicKey, this.user.secretPhrase);
+                }
+            }
+            else if (message.messageIsText) {
+                return converters.hexStringToString(message.messageBytes);
+            }
+            else {
+                return message.messageBytes ? '[BINARY] ' + message.messageBytes : '';
+            }
+        }
+        catch (e) {
+            console.log('Message parse exception', message, e);
+            return '** could not parse message bytes **';
+        }
+    };
+    HeatService = __decorate([
+        Service('heat'),
+        Inject('$q', '$http', 'settings', 'user', '$timeout', '$interval', 'env', '$rootScope'),
+        __metadata("design:paramtypes", [Function, Function, SettingsService,
+            UserService, Function, Function, EnvService, Object])
+    ], HeatService);
+    return HeatService;
+}());
+var HeatSubscriber = (function () {
+    function HeatSubscriber(url, $q, $timeout) {
+        this.url = url;
+        this.$q = $q;
+        this.$timeout = $timeout;
+        this.RETRY_SYNC_DELAY = 2.5 * 1000;
+        this.errRetryDelayCoef = 1;
+        this.BLOCK_PUSHED = "1";
+        this.BLOCK_POPPED = "2";
+        this.BALANCE_CHANGED = "3";
+        this.ORDER = "4";
+        this.TRADE = "5";
+        this.MESSAGE = "6";
+        this.UNCONFIRMED_TRANSACTION = "7";
+        this.MICROSERVICE = "8";
+        this.PEER = "9";
+        this.connectedSocketPromise = null;
+        this.subscribeTopics = [];
+        this.unsubscribeTopics = [];
+        this.needReset = false;
+    }
+    HeatSubscriber.prototype.blockPushed = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.BLOCK_PUSHED, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.blockPopped = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.BLOCK_POPPED, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.balanceChanged = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.BALANCE_CHANGED, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.order = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.ORDER, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.trade = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.TRADE, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.message = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.MESSAGE, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.unconfirmedTransaction = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.UNCONFIRMED_TRANSACTION, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.microservice = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.MICROSERVICE, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.peer = function (filter, callback, $scope) {
+        return this.subscribe(new HeatSubscriberTopic(this.PEER, filter), callback, $scope);
+    };
+    HeatSubscriber.prototype.reset = function (url) {
+        this.url = url;
+        this.needReset = true;
+    };
+    HeatSubscriber.prototype.subscribe = function (newTopic, callback, $scope) {
+        var topic = this.findExistingOrAddNewTopic(newTopic);
+        topic.addListener(callback);
+        var unsubscribe = this.createUnsubscribeFunction(topic, callback);
+        if (angular.isDefined($scope)) {
+            $scope.$on('$destroy', function () { unsubscribe(); });
+        }
+        this.syncTopicSubscriptions();
+        return unsubscribe;
+    };
+    HeatSubscriber.prototype.findExistingOrAddNewTopic = function (topic) {
+        for (var i = 0; i < this.subscribeTopics.length; i++) {
+            if (this.subscribeTopics[i].equals(topic)) {
+                return this.subscribeTopics[i];
+            }
+        }
+        this.subscribeTopics.push(topic);
+        return topic;
+    };
+    HeatSubscriber.prototype.createUnsubscribeFunction = function (topic, callback) {
+        var _this = this;
+        return function () {
+            topic.removeListener(callback);
+            if (topic.isEmpty()) {
+                _this.unsubscribeTopic(topic);
+            }
+        };
+    };
+    HeatSubscriber.prototype.unsubscribeTopic = function (topic) {
+        this.subscribeTopics = this.subscribeTopics.filter(function (t) { return t !== topic; });
+        this.unsubscribeTopics.push(topic);
+        this.syncTopicSubscriptions();
+    };
+    HeatSubscriber.prototype.syncTopicSubscriptions = function () {
+        var _this = this;
+        this.getConnectedSocket().then(function (websocket) {
+            _this.errRetryDelayCoef = 1;
+            if (_this.needReset) {
+                websocket.close(3001, "Heat subscribes reseted");
+                _this.needReset = false;
+                return;
+            }
+            _this.unsubscribeTopics.forEach(function (topic) {
+                if (topic.isSubscribed()) {
+                    _this.sendUnsubscribe(websocket, topic);
+                }
+            });
+            _this.unsubscribeTopics = _this.unsubscribeTopics.filter(function (topic) { return !topic.isSubscribed(); });
+            _this.subscribeTopics.forEach(function (topic) {
+                if (!topic.isSubscribed()) {
+                    _this.sendSubscribe(websocket, topic);
+                }
+            });
+            if (_this.subscribeTopics.find(function (topic) { return !topic.isSubscribed(); })) {
+                _this.$timeout(_this.RETRY_SYNC_DELAY).then(function () {
+                    _this.syncTopicSubscriptions();
+                });
+            }
+        }, function () {
+            _this.errRetryDelayCoef = Math.min(10, ++_this.errRetryDelayCoef);
+            _this.$timeout(_this.errRetryDelayCoef * _this.RETRY_SYNC_DELAY).then(function () {
+                _this.syncTopicSubscriptions();
+            });
+        });
+    };
+    HeatSubscriber.prototype.getConnectedSocket = function () {
+        if (this.connectedSocketPromise) {
+            return this.connectedSocketPromise;
+        }
+        var deferred = this.$q.defer();
+        var websocket = new WebSocket(this.url);
+        this.hookupWebsocketEventListeners(websocket, deferred);
+        return this.connectedSocketPromise = deferred.promise;
+    };
+    HeatSubscriber.prototype.hookupWebsocketEventListeners = function (websocket, deferred) {
+        var _this = this;
+        var onclose = function (event) {
+            deferred.reject();
+            _this.connectedSocketPromise = null;
+            websocket.onclose = null;
+            websocket.onopen = null;
+            websocket.onerror = null;
+            websocket.onmessage = null;
+            _this.subscribeTopics.forEach(function (topic) { topic.setSubscribed(false); });
+        };
+        var onerror = onclose;
+        var onopen = function (event) {
+            deferred.resolve(websocket);
+        };
+        var onmessage = function (event) {
+            try {
+                _this.onMessageReceived(JSON.parse(event.data));
+            }
+            catch (e) {
+                console.log("Websocket parse error", e);
+            }
+        };
+        websocket.onclose = onclose;
+        websocket.onopen = onopen;
+        websocket.onerror = onerror;
+        websocket.onmessage = onmessage;
+    };
+    HeatSubscriber.prototype.sendUnsubscribe = function (websocket, topic) {
+        if (websocket.readyState == 1) {
+            websocket.send(JSON.stringify(["unsubscribe", [[topic.topicId, topic.params]]]));
+            topic.setSubscribed(false);
+        }
+    };
+    HeatSubscriber.prototype.sendSubscribe = function (websocket, topic) {
+        if (websocket.readyState == 1) {
+            websocket.send(JSON.stringify(["subscribe", [[topic.topicId, topic.params]]]));
+            topic.setSubscribed(true);
+        }
+    };
+    HeatSubscriber.prototype.onMessageReceived = function (messageJson) {
+        var _this = this;
+        if (!angular.isArray(messageJson) || messageJson.length != 3) {
+            console.log("Websocket invalid message", messageJson);
+            return;
+        }
+        var topicAsStr = messageJson[0], details = messageJson[1], contents = messageJson[2];
+        if (!angular.isString(topicAsStr) || !angular.isObject(details)) {
+            console.log("Websocket invalid field", messageJson);
+            return;
+        }
+        this.subscribeTopics.forEach(function (topic) {
+            if (topic.topicId == topicAsStr && _this.topicMatchesDetails(topic, details)) {
+                _this.invokeListeners(topic, contents);
+            }
+        });
+    };
+    HeatSubscriber.prototype.topicMatchesDetails = function (topic, details) {
+        var filterKeys = Object.getOwnPropertyNames(topic.params);
+        for (var i = 0, key = filterKeys[i]; i < filterKeys.length; i++) {
+            if (topic.params[key] != details[key])
+                return false;
+        }
+        return true;
+    };
+    HeatSubscriber.prototype.invokeListeners = function (topic, contents) {
+        topic.listeners.forEach(function (listener) {
+            try {
+                listener(contents);
+            }
+            catch (e) {
+                console.error(e);
+            }
+        });
+    };
+    return HeatSubscriber;
+}());
+var HeatSubscriberTopic = (function () {
+    function HeatSubscriberTopic(topicId, params) {
+        this.topicId = topicId;
+        this.params = params;
+        this.listeners = [];
+        this.subscribed = false;
+        if (!angular.isString(topicId))
+            throw new Error("Topic must be a string");
+        if (!angular.isObject(params))
+            throw new Error("Params must be an object");
+        var names = Object.getOwnPropertyNames(params);
+        names.forEach(function (key) {
+            if (!angular.isString(params[key]))
+                throw new Error("Params property ".concat(key, " is not a string"));
+        });
+    }
+    HeatSubscriberTopic.prototype.setSubscribed = function (subscribed) {
+        this.subscribed = subscribed;
+    };
+    HeatSubscriberTopic.prototype.isSubscribed = function () {
+        return this.subscribed;
+    };
+    HeatSubscriberTopic.prototype.addListener = function (callback) {
+        if (this.listeners.find(function (cb) { return cb === callback; }))
+            throw new Error("Duplicate listener");
+        this.listeners.push(callback);
+    };
+    HeatSubscriberTopic.prototype.removeListener = function (callback) {
+        this.listeners = this.listeners.filter(function (c) { return c !== callback; });
+    };
+    HeatSubscriberTopic.prototype.isEmpty = function () {
+        return this.listeners.length == 0;
+    };
+    HeatSubscriberTopic.prototype.equals = function (other) {
+        if (this.topicId != other.topicId)
+            return false;
+        return this.objectEquals(this.params, other.params);
+    };
+    HeatSubscriberTopic.prototype.objectEquals = function (a, b) {
+        var namesA = Object.getOwnPropertyNames(a);
+        var namesB = Object.getOwnPropertyNames(b);
+        if (namesA.length != namesB.length)
+            return false;
+        for (var i = 0; i < namesA.length; i++) {
+            var key = namesA[i];
+            if (a[key] != b[key])
+                return false;
+        }
+        return true;
+    };
+    return HeatSubscriberTopic;
+}());
 var ARDRCurrency = (function () {
     function ARDRCurrency(masterSecretPhrase, secretPhrase, address) {
         this.masterSecretPhrase = masterSecretPhrase;
@@ -13967,1018 +14972,30 @@ var NXTCurrency = (function () {
     };
     return NXTCurrency;
 }());
-var heat;
-(function (heat) {
-    var bundle;
-    (function (bundle_1) {
-        var MAGIC = 2147483647;
-        var KEY_STORE_SEED = MAGIC - 1;
-        var ASSET_PROPERTIES_SEED = MAGIC - 2;
-        function createKeyStore(bundle) {
-            var buffer = new ByteBuffer(ByteBuffer.DEFAULT_CAPACITY, true);
-            buffer.writeInt32(KEY_STORE_SEED);
-            var nameBytes = converters.stringToByteArray(bundle.name);
-            buffer.writeShort(nameBytes.length);
-            nameBytes.forEach(function (b) { buffer.writeByte(b); });
-            var valueBytes = converters.stringToByteArray(bundle.value);
-            valueBytes.forEach(function (b) { buffer.writeByte(b); });
-            buffer.flip();
-            return buffer.toHex();
-        }
-        bundle_1.createKeyStore = createKeyStore;
-        function createAssetProperties(bundle) {
-            var buffer = new ByteBuffer(ByteBuffer.DEFAULT_CAPACITY, true);
-            buffer.writeInt32(ASSET_PROPERTIES_SEED);
-            buffer.writeInt64(Long.fromString(bundle.asset, true));
-            buffer.writeInt32(bundle.protocol);
-            var valueBytes = converters.stringToByteArray(bundle.value);
-            buffer.writeShort(valueBytes.length);
-            valueBytes.forEach(function (b) { buffer.writeByte(b); });
-            buffer.flip();
-            return buffer.toHex();
-        }
-        bundle_1.createAssetProperties = createAssetProperties;
-    })(bundle = heat.bundle || (heat.bundle = {}));
-})(heat || (heat = {}));
-var HeatAPI = (function () {
-    function HeatAPI(heat, user, $q) {
-        this.heat = heat;
-        this.user = user;
-        this.$q = $q;
+var ControlCharRenderService = (function () {
+    function ControlCharRenderService() {
     }
-    HeatAPI.prototype.registerAccountName = function (publicKey, captcha, name, isprivate, signature) {
-        return this.heat.get("/register/now/".concat(publicKey, "/").concat(captcha, "/").concat(name, "/").concat(isprivate, "/").concat(signature), 'value');
-    };
-    HeatAPI.prototype.getBlockchainStatus = function () {
-        return this.heat.get('/blockchain/status');
-    };
-    HeatAPI.prototype.getServerHealth = function (host, port) {
-        if (!host)
-            return this.heat.get('/tools/telemetry/health');
-        return this.heat.getRaw(host, port, '/tools/telemetry/health', null, false);
-    };
-    HeatAPI.prototype.getBlocks = function (from, to) {
-        return this.heat.get("/blockchain/blocks/".concat(from, "/").concat(to, "/null"));
-    };
-    HeatAPI.prototype.getBlock = function (numericId, includeTransactions) {
-        if (includeTransactions === void 0) { includeTransactions = true; }
-        return this.heat.get("/blockchain/block/".concat(numericId, "/").concat(includeTransactions));
-    };
-    HeatAPI.prototype.getBlockAtHeight = function (height, includeTransactions) {
-        return this.heat.get("/blockchain/block/height/".concat(height, "/").concat(includeTransactions));
-    };
-    HeatAPI.prototype.getAccountBlocks = function (account, from, to) {
-        return this.heat.get("/blockchain/blocks/account/".concat(account, "/").concat(from, "/").concat(to, "/null"));
-    };
-    HeatAPI.prototype.getAccountBlocksCount = function (account) {
-        return this.heat.get("/blockchain/blocks/account/count/".concat(account), "count");
-    };
-    HeatAPI.prototype.getPublicKey = function (account, ignoreErrorResponse) {
-        var deferred = this.$q.defer();
-        this.heat.get("/account/publickey/".concat(account), "value", ignoreErrorResponse).then(function (publicKey) {
-            if (!publicKey) {
-                deferred.resolve(null);
-                return;
-            }
-            var test = heat.crypto.getAccountIdFromPublicKey(publicKey);
-            if (test != account) {
-                console.log("Public key returned from server does not match account");
-                deferred.reject();
-            }
-            else {
-                deferred.resolve(publicKey);
-            }
-        }, deferred.reject);
-        return deferred.promise;
-    };
-    HeatAPI.prototype.getPublicKeyOrEmptyString = function (account) {
-        var deferred = this.$q.defer();
-        this.heat.get("/account/publickey/".concat(account), "value").then(function (publicKey) {
-            var test = heat.crypto.getAccountIdFromPublicKey(publicKey);
-            if (test != account) {
-                console.log("Public key returned from server does not match account");
-                deferred.reject();
-            }
-            else {
-                deferred.resolve(publicKey);
-            }
-        }, function (error) {
-            if ((error.errorDescription || "").toLowerCase() == "unknown publickey") {
-                deferred.resolve("");
-            }
-            else {
-                deferred.reject();
-            }
-        });
-        return deferred.promise;
-    };
-    HeatAPI.prototype.createTransaction = function (input) {
-        console.log("CreateTransaction", input);
-        var arg = { value: JSON.stringify(input) };
-        return this.heat.post('/tx/create', arg);
-    };
-    HeatAPI.prototype.broadcast = function (param) {
-        var arg = {};
-        if (angular.isDefined(param.transactionJSON)) {
-            arg['transactionJSON'] = JSON.stringify(param.transactionJSON);
-        }
-        if (angular.isDefined(param.transactionBytes)) {
-            arg['transactionBytes'] = param.transactionBytes;
-        }
-        return this.heat.post('/tx/broadcast', arg);
-    };
-    HeatAPI.prototype.getAllAssetProtocol1 = function (from, to) {
-        return this.heat.get("/exchange/assets/protocol1/".concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAssetProtocol1 = function (symbol) {
-        return this.heat.get("/exchange/asset/protocol1/".concat(symbol));
-    };
-    HeatAPI.prototype.getAsset = function (asset, propertiesAccount, propertiesProtocol) {
-        return this.heat.get("/exchange/asset/properties/".concat(asset, "/").concat(propertiesAccount, "/").concat(propertiesProtocol));
-    };
-    HeatAPI.prototype.getAssetCertification = function (asset, certifierAccount) {
-        return this.heat.get("/exchange/asset/certification/".concat(asset, "/").concat(certifierAccount));
-    };
-    HeatAPI.prototype.getAssets = function (propertiesAccount, propertiesProtocol, from, to) {
-        return this.heat.get("/assets/".concat(propertiesAccount, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAssetProperties = function (asset, propertiesAccount, propertiesProtocol) {
-        return this.heat.get("/exchange/asset/properties/".concat(asset, "/").concat(propertiesAccount, "/").concat(propertiesProtocol));
-    };
-    HeatAPI.prototype.getAccountPairOrders = function (account, currency, asset, from, to) {
-        return this.heat.get("/order/account/pair/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAccountPairOrdersCount = function (account, currency, asset) {
-        return this.heat.get("/order/account/pair/count/".concat(account, "/").concat(currency, "/").concat(asset), "count");
-    };
-    HeatAPI.prototype.getAccountAllOrders = function (account, from, to) {
-        return this.heat.get("/order/account/all/".concat(account, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAccountAllOrdersCount = function (account) {
-        return this.heat.get("/order/account/all/count/".concat(account), "count");
-    };
-    HeatAPI.prototype.getAskOrders = function (currency, asset, from, to) {
-        return this.heat.get("/order/pair/asks/".concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAskOrdersCount = function (currency, asset) {
-        return this.heat.get("/order/pair/asks/count/".concat(currency, "/").concat(asset), "count");
-    };
-    HeatAPI.prototype.getBidOrders = function (currency, asset, from, to) {
-        return this.heat.get("/order/pair/bids/".concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getBidOrdersCount = function (currency, asset) {
-        return this.heat.get("/order/pair/bids/count/".concat(currency, "/").concat(asset), "count");
-    };
-    HeatAPI.prototype.getAllAskOrders = function (from, to) {
-        return this.heat.get("/order/asks/".concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAllBidOrders = function (from, to) {
-        return this.heat.get("/order/bids/".concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAccountAskOrders = function (account, currency, asset, from, to) {
-        return this.heat.get("/order/account/pair/asks/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAccountBidOrders = function (account, currency, asset, from, to) {
-        return this.heat.get("/order/account/pair/bids/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getTrades = function (currency, asset, from, to) {
-        return this.heat.get("/trade/".concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getTradesCount = function (currency, asset) {
-        return this.heat.get("/trade/count/".concat(currency, "/").concat(asset), "count");
-    };
-    HeatAPI.prototype.getAllTrades = function (from, to) {
-        return this.heat.get("/trade/all/".concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAllAccountTrades = function (account, propertiesAccount, propertiesProtocol, from, to) {
-        return this.heat.get("/trade/account/".concat(account, "/").concat(propertiesAccount, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAllAccountTradesCount = function (account) {
-        return this.heat.get("/trade/account/count/".concat(account), "count");
-    };
-    HeatAPI.prototype.getAccountTrades = function (account, currency, asset, from, to) {
-        return this.heat.get("/trade/account/pair/".concat(account, "/").concat(currency, "/").concat(asset, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getAccountTradesCount = function (account, currency, asset) {
-        return this.heat.get("/trade/account/pair/count/".concat(account, "/").concat(currency, "/").concat(asset), "count");
-    };
-    HeatAPI.prototype.getAccountBalance = function (account, asset) {
-        return this.heat.get("/account/balance/".concat(account, "/").concat(asset));
-    };
-    HeatAPI.prototype.getAccountBalanceVirtual = function (account, asset, propertiesAccount, propertiesProtocol) {
-        return this.heat.get("/account/balance/virtual/".concat(account, "/").concat(asset, "/").concat(propertiesAccount, "/").concat(propertiesProtocol));
-    };
-    HeatAPI.prototype.getMarketsAll = function (sort, asc, propertiesAccountId, propertiesProtocol, from, to) {
-        return this.heat.get("/exchange/markets/all/".concat(sort, "/").concat(asc, "/").concat(propertiesAccountId, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getMarkets = function (currency, sort, asc, propertiesAccountId, propertiesProtocol, from, to) {
-        return this.heat.get("/exchange/markets/".concat(currency, "/").concat(sort, "/").concat(asc, "/").concat(propertiesAccountId, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getMarket = function (currency, asset, propertiesAccountId, propertiesProtocol) {
-        return this.heat.get("/exchange/market/".concat(currency, "/").concat(asset, "/").concat(propertiesAccountId, "/").concat(propertiesProtocol));
-    };
-    HeatAPI.prototype.getAccountBalances = function (account, propertiesAccount, propertiesProtocol, from, to) {
-        return this.heat.get("/account/balances/".concat(account, "/").concat(propertiesAccount, "/").concat(propertiesProtocol, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getPayments = function (account, currency, sort, asc, from, to) {
-        return this.heat.get("/account/payments/".concat(account, "/").concat(currency, "/").concat(sort, "/").concat(asc, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getPaymentsCount = function (account, currency) {
-        return this.heat.get("/account/payments/count/".concat(account, "/").concat(currency), "count");
-    };
-    HeatAPI.prototype.getMessagingContactMessagesCount = function (accountA, accountB) {
-        return this.heat.get("/messages/contact/count/".concat(accountA, "/").concat(accountB), "count");
-    };
-    HeatAPI.prototype.getMessagingContactMessages = function (accountA, accountB, from, to) {
-        return this.heat.get("/messages/contact/".concat(accountA, "/").concat(accountB, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getMessagingContactMessagesByTimestampRange = function (accountA, accountB, fromTimestamp, toTimestamp) {
-        return this.heat.get("/messages/contacttimestamprange/".concat(accountA, "/").concat(accountB, "/").concat(fromTimestamp, "/").concat(toTimestamp));
-    };
-    HeatAPI.prototype.getMessagingContacts = function (account, from, to) {
-        return this.heat.get("/messages/latest/".concat(account, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getOHLCChartData = function (currency, asset, window) {
-        return this.heat.get("/exchange/chartdata/".concat(currency, "/").concat(asset, "/").concat(window));
-    };
-    HeatAPI.prototype.getMiningInfo = function (secretPhrase) {
-        return this.heat.post('/mining/info?api_key=secret', { secretPhrase: secretPhrase }, false, null, true);
-    };
-    HeatAPI.prototype.startMining = function (secretPhrase) {
-        return this.heat.post('/mining/start?api_key=secret', { secretPhrase: secretPhrase }, false, null, true);
-    };
-    HeatAPI.prototype.stopMining = function (secretPhrase) {
-        return this.heat.post('/mining/stop?api_key=secret', { secretPhrase: secretPhrase }, false, null, true);
-    };
-    HeatAPI.prototype.getAccountByNumericId = function (numericId, ignoreErrorResponse) {
-        return this.heat.get("/account/find/".concat(numericId), null, ignoreErrorResponse);
-    };
-    HeatAPI.prototype.findAccountByName = function (name, ignoreErrorResponse) {
-        return this.heat.get("/account/find/name/".concat(name), null, ignoreErrorResponse);
-    };
-    HeatAPI.prototype.getTransaction = function (transaction) {
-        return this.heat.get("/blockchain/transaction/".concat(transaction));
-    };
-    HeatAPI.prototype.getTransactionsForAccount = function (account, from, to) {
-        return this.heat.get("/blockchain/transactions/account/".concat(account, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getTransactionsForAccountCount = function (account) {
-        return this.heat.get("/blockchain/transactions/account/count/".concat(account), "count");
-    };
-    HeatAPI.prototype.getTransactionsForBlock = function (block, from, to) {
-        return this.heat.get("/blockchain/transactions/block/".concat(block, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getTransactionsForBlockCount = function (block) {
-        return this.heat.get("/blockchain/transactions/block/count/".concat(block), "count");
-    };
-    HeatAPI.prototype.getTransactionsFromTo = function (sender, recipient, from, to) {
-        return this.heat.get("/blockchain/transactions/list/".concat(sender, "/").concat(recipient, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getTransactionsForAll = function (from, to) {
-        return this.heat.get("/blockchain/transactions/all/".concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.getTransactionsForAllCount = function () {
-        return this.heat.get("/blockchain/transactions/all/count", "count");
-    };
-    HeatAPI.prototype.searchAccounts = function (query, from, to) {
-        return this.heat.get("/search/accounts/".concat(query, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.searchAccountsCount = function (query) {
-        return this.heat.get("/search/accounts/count/".concat(query), "count");
-    };
-    HeatAPI.prototype.searchPublicNames = function (query, from, to, ignoreErrorResponse) {
-        return this.heat.get("/account/search/0/".concat(query, "/").concat(from, "/").concat(to), null, ignoreErrorResponse);
-    };
-    HeatAPI.prototype.rewardsAccount = function (account) {
-        return this.heat.get("/mining/rewards/account/".concat(account));
-    };
-    HeatAPI.prototype.rewardsList = function (from, to) {
-        return this.heat.get("/mining/rewards/list/".concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.rewardsListCount = function () {
-        return this.heat.get('/mining/rewards/list/count', 'count');
-    };
-    HeatAPI.prototype.getKeystoreEntryCountByAccount = function (account) {
-        return this.heat.get("/keystore/count/".concat(account), 'count');
-    };
-    HeatAPI.prototype.getKeystoreAccountEntry = function (account, key) {
-        return this.heat.get("/keystore/get/".concat(account, "/").concat(key));
-    };
-    HeatAPI.prototype.getKeystoreAccountEntryExt = function (account, keys) {
-        return this.heat.get("/keystore/getExt/".concat(account, "/").concat(keys));
-    };
-    HeatAPI.prototype.listKeystoreAccountEntries = function (account, from, to) {
-        return this.heat.get("/keystore/list/".concat(account, "/").concat(from, "/").concat(to));
-    };
-    HeatAPI.prototype.saveKeystoreEntry = function (key, value, secretPhrase) {
-        return this.heat.post("/keystore/put", { key: key, value: value, fee: 1000000, deadline: 1440, secretPhrase: secretPhrase });
-    };
-    HeatAPI.prototype.listMasternodes = function () {
-        return this.heat.get("/account/internetaddress/list");
-    };
-    HeatAPI.prototype.baseTimestamp = function () {
-        return this.heat.get('/blockchain/basetimestamp');
-    };
-    HeatAPI.prototype.uploadFile = function (fileName, arrayBuffer) {
-        return this.heat.post('/messaging/file/upload', {
-            fileName: fileName,
-            arrayBuffer: arrayBuffer
-        }, undefined, undefined, undefined, true, this.heat.settings.get(SettingsService.HEAT_MESSAGING));
-    };
-    HeatAPI.prototype.downloadFile = function (fileName) {
-        return this.heat.get("/messaging/file/download/".concat(fileName), undefined, undefined, true, this.heat.settings.get(SettingsService.HEAT_MESSAGING));
-    };
-    HeatAPI.fee = {
-        standard: utils.convertToQNT('0.01'),
-        assetIssue: utils.convertToQNT('500.00'),
-        assetIssueMore: utils.convertToQNT('0.01'),
-        whitelistAssetAccount: utils.convertToQNT('100.00'),
-        assetAssignFee: utils.convertToQNT('0.1'),
-        assetAssignExpiration: utils.convertToQNT('0.01'),
-        whitelistMarket: utils.convertToQNT('10.00'),
-        registerInternetAddressFee: utils.convertToQNT('100.00'),
-        supervisoryAccountFee: utils.convertToQNT('0.01'),
-        accountAssetLimitFee: utils.convertToQNT('0.01')
-    };
-    return HeatAPI;
+    ControlCharRenderService.prototype.toHtml = function (rawText) {
+        return this.nl2br(rawText, '<br />');
+    };
+    ControlCharRenderService.prototype.nl2br = function (str, breakTag) {
+        return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1' + breakTag + '$2');
+    };
+    ControlCharRenderService = __decorate([
+        Service('controlCharRender')
+    ], ControlCharRenderService);
+    return ControlCharRenderService;
 }());
-var ServerEngineError = (function () {
-    function ServerEngineError(data) {
-        this.data = data;
-        if (angular.isObject(data)) {
-            this.description = data['errorDescription'] || data['error'];
-            this.code = data['errorCode'] || -1;
-        }
-        else {
-            this.description = 'misc error';
-            this.code = 99;
-        }
+var EmojiiRenderService = (function () {
+    function EmojiiRenderService() {
     }
-    return ServerEngineError;
-}());
-var InternalServerTimeoutError = (function (_super) {
-    __extends(InternalServerTimeoutError, _super);
-    function InternalServerTimeoutError() {
-        return _super.call(this, { error: 'Internal timeout' }) || this;
-    }
-    return InternalServerTimeoutError;
-}(ServerEngineError));
-var HeatService = (function () {
-    function HeatService($q, $http, settings, user, $timeout, $interval, env, $rootScope) {
-        var _this = this;
-        this.$q = $q;
-        this.$http = $http;
-        this.settings = settings;
-        this.user = user;
-        this.$timeout = $timeout;
-        this.$interval = $interval;
-        this.env = env;
-        this.$rootScope = $rootScope;
-        this.api = new HeatAPI(this, this.user, this.$q);
-        this.subscriber = this.createSubscriber(this.settings.get(SettingsService.HEAT_WEBSOCKET));
-        var initBaseTime = function () { return _this.api.baseTimestamp().then(function (basetimestamp) {
-            utils.setBaseTimestamp(parseInt(basetimestamp));
-        }); };
-        this.settings.initialized.then(function (v) { return initBaseTime(); });
-        try {
-            initBaseTime();
-        }
-        catch (e) {
-            console.error(e);
-        }
-        $rootScope.$on('HEAT_SERVER_LOCATION', function (event, nothing) {
-            try {
-                initBaseTime();
-            }
-            catch (e) {
-                console.error(e);
-            }
-        });
-        var refreshInterval = $interval(function () {
-            if (utils.isBaseDate()) {
-                $interval.cancel(refreshInterval);
-            }
-            else {
-                initBaseTime();
-            }
-        }, 3 * 1000, 0, false);
-    }
-    HeatService.prototype.createSubscriber = function (url) {
-        return new HeatSubscriber(url, this.$q, this.$timeout);
+    EmojiiRenderService.prototype.toHtml = function (rawText) {
+        return rawText;
     };
-    HeatService.prototype.resetSubscriber = function () {
-        this.subscriber.reset(this.settings.get(SettingsService.HEAT_WEBSOCKET));
-    };
-    HeatService.prototype.switchToServer = function (connectionWay, serverDescriptor) {
-        if (connectionWay)
-            this.settings.setConnectionWay(connectionWay);
-        if (serverDescriptor)
-            this.settings.setCurrentServer(serverDescriptor);
-        this.resetSubscriber();
-        this.$rootScope.$emit('HEAT_SERVER_LOCATION', "nothing");
-    };
-    HeatService.prototype.getAuthData = function () {
-        var timestamp = Date.now();
-        var baseMessage = this.user.account + timestamp;
-        var message = converters.stringToHexString(baseMessage);
-        var secret = converters.stringToHexString(this.user.secretPhrase);
-        var signature = heat.crypto.signBytes(message, secret);
-        return {
-            auth: {
-                accountRS: this.user.account,
-                timestamp: timestamp,
-                signature: signature,
-                publicKey: this.user.publicKey
-            }
-        };
-    };
-    HeatService.prototype.get = function (route, returns, ignoreErrorResponse, isFile, hostPort) {
-        if (ignoreErrorResponse === void 0) { ignoreErrorResponse = false; }
-        return this.getRaw(hostPort ? hostPort.host : this.settings.get(SettingsService.HEAT_HOST), hostPort ? hostPort.port : this.settings.get(SettingsService.HEAT_PORT), route, returns, ignoreErrorResponse, isFile);
-    };
-    HeatService.prototype.getRaw = function (host, port, route, returns, ignoreErrorResponse, isFile) {
-        var _this = this;
-        route = "api/v1" + route;
-        var deferred = this.$q.defer();
-        if (this.env.type == EnvType.BROWSER) {
-            var portStr = port ? ":".concat(port) : "";
-            var config = void 0;
-            if (isFile) {
-                config = {
-                    headers: { 'Content-Type': undefined },
-                    transformResponse: [
-                        function (data) {
-                            return data;
-                        }
-                    ],
-                    responseType: "arraybuffer"
-                };
-            }
-            else {
-                config = {
-                    headers: { 'Content-Type': 'application/json' }
-                };
-            }
-            this.browserHttpGet([host, portStr, '/', route].join(''), config, function (response) {
-                _this.logResponse(route, null, response);
-                var data = angular.isString(returns) ? response.data[returns] : response.data;
-                deferred.resolve(data);
-            }, function (response) {
-                if (ignoreErrorResponse) {
-                    deferred.resolve();
-                }
-                else {
-                    _this.logErrorResponse(route, null, response);
-                    deferred.reject(new ServerEngineError(isFile ? response : response.data));
-                }
-            });
-        }
-        else if (this.env.type == EnvType.NODEJS) {
-            var isHttps = host.indexOf('https://') == 0;
-            this.nodeHttpGet(isHttps, host.replace(/^(\w+:\/\/)/, ''), port, '/' + route, function (response) {
-                _this.logResponse(route, null, response);
-                var data = angular.isString(returns) ? response[returns] : response;
-                deferred.resolve(data);
-            }, function (response) {
-                if (ignoreErrorResponse) {
-                    deferred.resolve();
-                }
-                else {
-                    _this.logErrorResponse(route, null, response);
-                    var data = Object.assign(response, { host: host, port: port, route: route, response: response });
-                    deferred.reject(new ServerEngineError(data));
-                }
-            }, isFile);
-        }
-        return deferred.promise;
-    };
-    HeatService.prototype.browserHttpGet = function (url, config, onSuccess, onFailure) {
-        this.$http.get(url, config).then(function (response) {
-            if (angular.isDefined(response.data.errorDescription)) {
-                onFailure(response);
-            }
-            else {
-                onSuccess(response);
-            }
-        }, function (response) { onFailure(response); });
-    };
-    HeatService.prototype.nodeHttpGet = function (isHttps, hostname, port, path, onSuccess, onFailure, isFile) {
-        var options = {
-            hostname: hostname, port: port, path: path, method: 'GET',
-            headers: {
-                'Content-Type': isFile ? 'multipart/form-data' : 'application/json'
-            }
-        };
-        var http = require(isHttps ? 'https' : 'http');
-        var req = http.request(options, function (res) {
-            if (isFile) {
-                if (res.statusCode == 200) {
-                    var chunkArray_1 = [];
-                    res.on('data', function (chunk) { return chunkArray_1.push(chunk); });
-                    res.on('end', function () {
-                        onSuccess(Buffer.concat(chunkArray_1));
-                    });
-                }
-                else {
-                    onFailure(res.statusMessage || res);
-                }
-            }
-            else {
-                res.setEncoding('utf8');
-                var body_1 = [];
-                res.on('data', function (chunk) { body_1.push(chunk); });
-                res.on('end', function () {
-                    var response;
-                    var content = body_1.join('');
-                    try {
-                        response = JSON.parse(content);
-                        if (angular.isDefined(response.errorDescription)) {
-                            onFailure(response);
-                        }
-                        else {
-                            onSuccess(response);
-                        }
-                    }
-                    catch (e) {
-                        console.error("response in not JSON parseable: \n" + content);
-                        onFailure(content);
-                    }
-                });
-            }
-        });
-        req.on('error', function (e) { onFailure(e); });
-        req.end();
-    };
-    HeatService.prototype.post = function (route, request, withAuth, returns, localHostOnly, isFile, hostPort) {
-        var host;
-        var port;
-        if (hostPort) {
-            host = hostPort.host;
-            port = hostPort.port;
-        }
-        else {
-            host = localHostOnly ? this.settings.get(SettingsService.HEAT_HOST_LOCAL) : this.settings.get(SettingsService.HEAT_HOST);
-            port = localHostOnly ? this.settings.get(SettingsService.HEAT_PORT_LOCAL) : this.settings.get(SettingsService.HEAT_PORT);
-        }
-        return this.postRaw(host, port, route, request, withAuth, returns, localHostOnly, isFile);
-    };
-    HeatService.prototype.postRaw = function (host, port, route, request, withAuth, returns, localHostOnly, isFile) {
-        var _this = this;
-        route = "api/v1" + route;
-        var deferred = this.$q.defer();
-        var req = request || {};
-        if (withAuth) {
-            req = angular.extend(req, this.getAuthData());
-        }
-        if (this.env.isBrowser()) {
-            var portStr = port ? ":".concat(port) : "";
-            var address = [host, portStr, '/', route].join('');
-            if (localHostOnly) {
-                if (address.indexOf('http://localhost') != 0) {
-                    deferred.reject(new ServerEngineError({
-                        errorDescription: "Operation allowed to localhost only! ".concat(address, " is not allowed"),
-                        errorCode: 10
-                    }));
-                }
-            }
-            this.browserHttpPost(address, req, function (response) {
-                _this.logResponse(route, request, response);
-                var data = angular.isString(response)
-                    ? response
-                    : (angular.isString(returns) ? response.data[returns] : response.data);
-                deferred.resolve(data);
-            }, function (response) {
-                _this.logErrorResponse(route, request, response);
-                deferred.reject(new ServerEngineError(response.data));
-            }, isFile);
-        }
-        else if (this.env.type == EnvType.NODEJS) {
-            var address = host.replace(/^(\w+:\/\/)/, '');
-            if (localHostOnly) {
-                if (address.indexOf('localhost') != 0) {
-                    deferred.reject(new ServerEngineError({
-                        errorDescription: "Operation allowed to localhost only ".concat(address, " is not allowed"),
-                        errorCode: 10
-                    }));
-                }
-            }
-            var isHttps = host.indexOf('https://') == 0;
-            this.nodeHttpPost(isHttps, address, port, '/' + route, req, function (response) {
-                _this.logResponse(route, request, response);
-                var data = angular.isString(response)
-                    ? response
-                    : (angular.isString(returns) ? response.data[returns] : response.data);
-                deferred.resolve(data);
-            }, function (response) {
-                _this.logErrorResponse(route, request, response);
-                deferred.reject(new ServerEngineError(response.data));
-            }, isFile);
-        }
-        return deferred.promise;
-    };
-    HeatService.prototype.browserHttpPost = function (url, request, onSuccess, onFailure, isFile) {
-        var config;
-        if (isFile) {
-            var formData = new FormData();
-            formData.append("fileName", request.fileName);
-            formData.append("file", new Blob([request.arrayBuffer]));
-            config = {
-                method: 'POST',
-                url: url,
-                headers: { 'Content-Type': undefined },
-                data: formData
-            };
-        }
-        else {
-            config = {
-                method: 'POST',
-                url: url,
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                data: request,
-                transformRequest: function (obj) {
-                    var str = [];
-                    for (var p in obj) {
-                        str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
-                    }
-                    return str.join("&");
-                }
-            };
-        }
-        this.$http(config).then(function (response) {
-            if (angular.isDefined(response.data.errorDescription)) {
-                onFailure(response);
-            }
-            else {
-                onSuccess(response);
-            }
-        }, function (response) { onFailure(response); });
-    };
-    HeatService.prototype.nodeHttpPost = function (isHttps, hostname, port, path, request, onSuccess, onFailure, isFile) {
-        var http = require(isHttps ? 'https' : 'http');
-        if (isFile) {
-            var FormData_1 = require("form-data");
-            var form = new FormData_1();
-            form.append('fileName', request.fileName);
-            form.append('file', Buffer.from(request.arrayBuffer));
-            var req = http.request({
-                hostname: hostname, port: port, path: path, method: 'POST',
-                headers: form.getHeaders(),
-            }, function (response) {
-                if ((response === null || response === void 0 ? void 0 : response.statusCode) == 200) {
-                    onSuccess(response.statusMessage);
-                }
-                else {
-                    onFailure(response);
-                }
-            });
-            req.on('error', function (e) { onFailure(e); });
-            form.pipe(req);
-        }
-        else {
-            var querystring = require('querystring');
-            var body = querystring.stringify(request);
-            var options = {
-                hostname: hostname, port: port, path: path, method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    "Content-Length": body.length
-                }
-            };
-            var req = http.request(options, function (res) {
-                res.setEncoding('utf8');
-                var respBody = [];
-                res.on('data', function (chunk) { respBody.push(chunk); });
-                res.on('end', function () {
-                    var responseBody;
-                    try {
-                        responseBody = JSON.parse(respBody.join(''));
-                    }
-                    catch (e) {
-                        console.error(e);
-                        onFailure(res);
-                    }
-                    var response = { data: responseBody };
-                    if (angular.isDefined(response.data.errorDescription)) {
-                        onFailure(response);
-                    }
-                    else {
-                        onSuccess(response);
-                    }
-                });
-            });
-            req.on('error', function (e) { onFailure(e); });
-            req.write(body);
-            req.end();
-        }
-    };
-    HeatService.prototype.logResponse = function (route, request, response) {
-        if (this.settings.get(SettingsService.LOG_HEAT_ALL)) {
-            console.log("HEAT [".concat(route, "]"), {
-                request: request,
-                response: response
-            });
-        }
-    };
-    HeatService.prototype.logErrorResponse = function (route, request, response) {
-        if (this.settings.get(SettingsService.LOG_HEAT_ERRORS)) {
-            console.error("HEAT [".concat(route, "]"), {
-                request: request,
-                response: response
-            });
-        }
-    };
-    HeatService.prototype.mock = function (data) {
-        var deferred = this.$q.defer();
-        deferred.resolve(data);
-        return deferred.promise;
-    };
-    HeatService.prototype.getHeatMessageContents = function (message) {
-        try {
-            if (message.messageIsEncrypted || message.messageIsEncryptedToSelf) {
-                var byteArray = converters.hexStringToByteArray(message.messageBytes);
-                var nonce = converters.byteArrayToHexString(byteArray.slice(0, 32));
-                var data = converters.byteArrayToHexString(byteArray.slice(32));
-                if (message.recipient == this.user.account || (message.recipient == '0' && message.sender == this.user.account)) {
-                    return heat.crypto.decryptMessage(data, nonce, message.senderPublicKey, this.user.secretPhrase);
-                }
-                else if (message.sender == this.user.account) {
-                    return heat.crypto.decryptMessage(data, nonce, message.recipientPublicKey, this.user.secretPhrase);
-                }
-            }
-            else if (message.messageIsText) {
-                return converters.hexStringToString(message.messageBytes);
-            }
-            else {
-                return message.messageBytes ? '[BINARY] ' + message.messageBytes : '';
-            }
-        }
-        catch (e) {
-            console.log('Message parse exception', message, e);
-            return '** could not parse message bytes **';
-        }
-    };
-    HeatService = __decorate([
-        Service('heat'),
-        Inject('$q', '$http', 'settings', 'user', '$timeout', '$interval', 'env', '$rootScope'),
-        __metadata("design:paramtypes", [Function, Function, SettingsService,
-            UserService, Function, Function, EnvService, Object])
-    ], HeatService);
-    return HeatService;
-}());
-var HeatSubscriber = (function () {
-    function HeatSubscriber(url, $q, $timeout) {
-        this.url = url;
-        this.$q = $q;
-        this.$timeout = $timeout;
-        this.RETRY_SYNC_DELAY = 2.5 * 1000;
-        this.errRetryDelayCoef = 1;
-        this.BLOCK_PUSHED = "1";
-        this.BLOCK_POPPED = "2";
-        this.BALANCE_CHANGED = "3";
-        this.ORDER = "4";
-        this.TRADE = "5";
-        this.MESSAGE = "6";
-        this.UNCONFIRMED_TRANSACTION = "7";
-        this.MICROSERVICE = "8";
-        this.PEER = "9";
-        this.connectedSocketPromise = null;
-        this.subscribeTopics = [];
-        this.unsubscribeTopics = [];
-        this.needReset = false;
-    }
-    HeatSubscriber.prototype.blockPushed = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.BLOCK_PUSHED, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.blockPopped = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.BLOCK_POPPED, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.balanceChanged = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.BALANCE_CHANGED, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.order = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.ORDER, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.trade = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.TRADE, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.message = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.MESSAGE, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.unconfirmedTransaction = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.UNCONFIRMED_TRANSACTION, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.microservice = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.MICROSERVICE, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.peer = function (filter, callback, $scope) {
-        return this.subscribe(new HeatSubscriberTopic(this.PEER, filter), callback, $scope);
-    };
-    HeatSubscriber.prototype.reset = function (url) {
-        this.url = url;
-        this.needReset = true;
-    };
-    HeatSubscriber.prototype.subscribe = function (newTopic, callback, $scope) {
-        var topic = this.findExistingOrAddNewTopic(newTopic);
-        topic.addListener(callback);
-        var unsubscribe = this.createUnsubscribeFunction(topic, callback);
-        if (angular.isDefined($scope)) {
-            $scope.$on('$destroy', function () { unsubscribe(); });
-        }
-        this.syncTopicSubscriptions();
-        return unsubscribe;
-    };
-    HeatSubscriber.prototype.findExistingOrAddNewTopic = function (topic) {
-        for (var i = 0; i < this.subscribeTopics.length; i++) {
-            if (this.subscribeTopics[i].equals(topic)) {
-                return this.subscribeTopics[i];
-            }
-        }
-        this.subscribeTopics.push(topic);
-        return topic;
-    };
-    HeatSubscriber.prototype.createUnsubscribeFunction = function (topic, callback) {
-        var _this = this;
-        return function () {
-            topic.removeListener(callback);
-            if (topic.isEmpty()) {
-                _this.unsubscribeTopic(topic);
-            }
-        };
-    };
-    HeatSubscriber.prototype.unsubscribeTopic = function (topic) {
-        this.subscribeTopics = this.subscribeTopics.filter(function (t) { return t !== topic; });
-        this.unsubscribeTopics.push(topic);
-        this.syncTopicSubscriptions();
-    };
-    HeatSubscriber.prototype.syncTopicSubscriptions = function () {
-        var _this = this;
-        this.getConnectedSocket().then(function (websocket) {
-            _this.errRetryDelayCoef = 1;
-            if (_this.needReset) {
-                websocket.close(3001, "Heat subscribes reseted");
-                _this.needReset = false;
-                return;
-            }
-            _this.unsubscribeTopics.forEach(function (topic) {
-                if (topic.isSubscribed()) {
-                    _this.sendUnsubscribe(websocket, topic);
-                }
-            });
-            _this.unsubscribeTopics = _this.unsubscribeTopics.filter(function (topic) { return !topic.isSubscribed(); });
-            _this.subscribeTopics.forEach(function (topic) {
-                if (!topic.isSubscribed()) {
-                    _this.sendSubscribe(websocket, topic);
-                }
-            });
-            if (_this.subscribeTopics.find(function (topic) { return !topic.isSubscribed(); })) {
-                _this.$timeout(_this.RETRY_SYNC_DELAY).then(function () {
-                    _this.syncTopicSubscriptions();
-                });
-            }
-        }, function () {
-            _this.errRetryDelayCoef = Math.min(10, ++_this.errRetryDelayCoef);
-            _this.$timeout(_this.errRetryDelayCoef * _this.RETRY_SYNC_DELAY).then(function () {
-                _this.syncTopicSubscriptions();
-            });
-        });
-    };
-    HeatSubscriber.prototype.getConnectedSocket = function () {
-        if (this.connectedSocketPromise) {
-            return this.connectedSocketPromise;
-        }
-        var deferred = this.$q.defer();
-        var websocket = new WebSocket(this.url);
-        this.hookupWebsocketEventListeners(websocket, deferred);
-        return this.connectedSocketPromise = deferred.promise;
-    };
-    HeatSubscriber.prototype.hookupWebsocketEventListeners = function (websocket, deferred) {
-        var _this = this;
-        var onclose = function (event) {
-            deferred.reject();
-            _this.connectedSocketPromise = null;
-            websocket.onclose = null;
-            websocket.onopen = null;
-            websocket.onerror = null;
-            websocket.onmessage = null;
-            _this.subscribeTopics.forEach(function (topic) { topic.setSubscribed(false); });
-        };
-        var onerror = onclose;
-        var onopen = function (event) {
-            deferred.resolve(websocket);
-        };
-        var onmessage = function (event) {
-            try {
-                _this.onMessageReceived(JSON.parse(event.data));
-            }
-            catch (e) {
-                console.log("Websocket parse error", e);
-            }
-        };
-        websocket.onclose = onclose;
-        websocket.onopen = onopen;
-        websocket.onerror = onerror;
-        websocket.onmessage = onmessage;
-    };
-    HeatSubscriber.prototype.sendUnsubscribe = function (websocket, topic) {
-        if (websocket.readyState == 1) {
-            websocket.send(JSON.stringify(["unsubscribe", [[topic.topicId, topic.params]]]));
-            topic.setSubscribed(false);
-        }
-    };
-    HeatSubscriber.prototype.sendSubscribe = function (websocket, topic) {
-        if (websocket.readyState == 1) {
-            websocket.send(JSON.stringify(["subscribe", [[topic.topicId, topic.params]]]));
-            topic.setSubscribed(true);
-        }
-    };
-    HeatSubscriber.prototype.onMessageReceived = function (messageJson) {
-        var _this = this;
-        if (!angular.isArray(messageJson) || messageJson.length != 3) {
-            console.log("Websocket invalid message", messageJson);
-            return;
-        }
-        var topicAsStr = messageJson[0], details = messageJson[1], contents = messageJson[2];
-        if (!angular.isString(topicAsStr) || !angular.isObject(details)) {
-            console.log("Websocket invalid field", messageJson);
-            return;
-        }
-        this.subscribeTopics.forEach(function (topic) {
-            if (topic.topicId == topicAsStr && _this.topicMatchesDetails(topic, details)) {
-                _this.invokeListeners(topic, contents);
-            }
-        });
-    };
-    HeatSubscriber.prototype.topicMatchesDetails = function (topic, details) {
-        var filterKeys = Object.getOwnPropertyNames(topic.params);
-        for (var i = 0, key = filterKeys[i]; i < filterKeys.length; i++) {
-            if (topic.params[key] != details[key])
-                return false;
-        }
-        return true;
-    };
-    HeatSubscriber.prototype.invokeListeners = function (topic, contents) {
-        topic.listeners.forEach(function (listener) {
-            try {
-                listener(contents);
-            }
-            catch (e) {
-                console.error(e);
-            }
-        });
-    };
-    return HeatSubscriber;
-}());
-var HeatSubscriberTopic = (function () {
-    function HeatSubscriberTopic(topicId, params) {
-        this.topicId = topicId;
-        this.params = params;
-        this.listeners = [];
-        this.subscribed = false;
-        if (!angular.isString(topicId))
-            throw new Error("Topic must be a string");
-        if (!angular.isObject(params))
-            throw new Error("Params must be an object");
-        var names = Object.getOwnPropertyNames(params);
-        names.forEach(function (key) {
-            if (!angular.isString(params[key]))
-                throw new Error("Params property ".concat(key, " is not a string"));
-        });
-    }
-    HeatSubscriberTopic.prototype.setSubscribed = function (subscribed) {
-        this.subscribed = subscribed;
-    };
-    HeatSubscriberTopic.prototype.isSubscribed = function () {
-        return this.subscribed;
-    };
-    HeatSubscriberTopic.prototype.addListener = function (callback) {
-        if (this.listeners.find(function (cb) { return cb === callback; }))
-            throw new Error("Duplicate listener");
-        this.listeners.push(callback);
-    };
-    HeatSubscriberTopic.prototype.removeListener = function (callback) {
-        this.listeners = this.listeners.filter(function (c) { return c !== callback; });
-    };
-    HeatSubscriberTopic.prototype.isEmpty = function () {
-        return this.listeners.length == 0;
-    };
-    HeatSubscriberTopic.prototype.equals = function (other) {
-        if (this.topicId != other.topicId)
-            return false;
-        return this.objectEquals(this.params, other.params);
-    };
-    HeatSubscriberTopic.prototype.objectEquals = function (a, b) {
-        var namesA = Object.getOwnPropertyNames(a);
-        var namesB = Object.getOwnPropertyNames(b);
-        if (namesA.length != namesB.length)
-            return false;
-        for (var i = 0; i < namesA.length; i++) {
-            var key = namesA[i];
-            if (a[key] != b[key])
-                return false;
-        }
-        return true;
-    };
-    return HeatSubscriberTopic;
+    EmojiiRenderService = __decorate([
+        Service('emojiiRender')
+    ], EmojiiRenderService);
+    return EmojiiRenderService;
 }());
 var p2p;
 (function (p2p) {
@@ -16873,31 +16890,6 @@ var p2p;
     }(p2p.BaseProtocol));
     p2p.U2UProtocol = U2UProtocol;
 })(p2p || (p2p = {}));
-var ControlCharRenderService = (function () {
-    function ControlCharRenderService() {
-    }
-    ControlCharRenderService.prototype.toHtml = function (rawText) {
-        return this.nl2br(rawText, '<br />');
-    };
-    ControlCharRenderService.prototype.nl2br = function (str, breakTag) {
-        return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1' + breakTag + '$2');
-    };
-    ControlCharRenderService = __decorate([
-        Service('controlCharRender')
-    ], ControlCharRenderService);
-    return ControlCharRenderService;
-}());
-var EmojiiRenderService = (function () {
-    function EmojiiRenderService() {
-    }
-    EmojiiRenderService.prototype.toHtml = function (rawText) {
-        return rawText;
-    };
-    EmojiiRenderService = __decorate([
-        Service('emojiiRender')
-    ], EmojiiRenderService);
-    return EmojiiRenderService;
-}());
 var AccountAssetLimitService = (function (_super) {
     __extends(AccountAssetLimitService, _super);
     function AccountAssetLimitService($q, user, heat) {
@@ -19024,6 +19016,122 @@ var EthereumAccountComponent = (function () {
     ], EthereumAccountComponent);
     return EthereumAccountComponent;
 }());
+var HomeComponent = (function () {
+    function HomeComponent(user) {
+        this.user = user;
+        user.requireLogin();
+        user.on(UserService.EVENT_UNLOCKED, function () {
+        });
+    }
+    HomeComponent = __decorate([
+        RouteConfig('/home'),
+        Component({
+            selector: 'home',
+            template: "\n    <div layout=\"column\" flex layout-padding layout-fill>\n      <virtual-repeat-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-transactions>\n      <!-- <virtual-repeat-eth-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-eth-transactions> -->\n    </div>\n  "
+        }),
+        Inject('user'),
+        __metadata("design:paramtypes", [UserService])
+    ], HomeComponent);
+    return HomeComponent;
+}());
+var IotaAccountComponent = (function () {
+    function IotaAccountComponent($scope, iotaBlockExplorerService, iotaPendingTransactions, $interval, $mdToast, settings, user) {
+        this.$scope = $scope;
+        this.iotaBlockExplorerService = iotaBlockExplorerService;
+        this.iotaPendingTransactions = iotaPendingTransactions;
+        this.$interval = $interval;
+        this.$mdToast = $mdToast;
+        this.settings = settings;
+        this.user = user;
+        this.pendingTransactions = [];
+        this.prevIndex = 0;
+        this.busy = true;
+    }
+    IotaAccountComponent.prototype.$onInit = function () {
+        var _this = this;
+        this.refresh();
+        var listener = this.updatePendingTransactions.bind(this);
+        this.iotaPendingTransactions.addListener(listener);
+        this.updatePendingTransactions();
+        var promise = this.$interval(this.timerHandler.bind(this), 30000);
+        this.timerHandler();
+        this.$scope.$on('$destroy', function () {
+            _this.iotaPendingTransactions.removeListener(listener);
+            _this.$interval.cancel(promise);
+        });
+    };
+    IotaAccountComponent.prototype.timerHandler = function () {
+        var _this = this;
+        this.refresh();
+        if (this.pendingTransactions.length) {
+            this.iotaBlockExplorerService.getAccountInfo(this.user.currency.secretPhrase)
+                .then(function (recentTransactions) {
+                for (var i = 0; i < _this.pendingTransactions.length; i++) {
+                    var isPending = true;
+                    for (var j = 0; j < recentTransactions.transfers.length; j++) {
+                        if (recentTransactions.transfers[j].hash == _this.pendingTransactions[i].txId) {
+                            isPending = false;
+                            break;
+                        }
+                    }
+                    if (!isPending) {
+                        _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with id ".concat(_this.pendingTransactions[i].txId, " found")).hideDelay(2000));
+                        _this.iotaPendingTransactions.remove(_this.pendingTransactions[i].address, _this.pendingTransactions[i].txId, _this.pendingTransactions[i].time);
+                    }
+                }
+            }, function (err) {
+                console.log('Error in getting recent IOTA Transactions ' + err);
+            })
+                .catch(function (reason) { return console.error(reason); });
+        }
+    };
+    IotaAccountComponent.prototype.updatePendingTransactions = function () {
+        var _this = this;
+        this.$scope.$evalAsync(function () {
+            _this.pendingTransactions = [];
+            var addr = _this.user.currency.address;
+            var txns = _this.iotaPendingTransactions.pending[addr];
+            if (txns) {
+                var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
+                txns.forEach(function (tx) {
+                    _this.pendingTransactions.push({
+                        date: dateFormat(new Date(tx.time), format),
+                        time: tx.time,
+                        txId: tx.txId,
+                        address: addr
+                    });
+                });
+                _this.pendingTransactions.sort(function (a, b) { return b.time - a.time; });
+            }
+        });
+    };
+    IotaAccountComponent.prototype.refresh = function () {
+        var _this = this;
+        this.busy = true;
+        this.balanceUnconfirmed = "";
+        this.iotaBlockExplorerService.getAccountInfo(this.user.currency.secretPhrase)
+            .then(function (info) {
+            _this.$scope.$evalAsync(function () {
+                _this.balanceUnconfirmed = info ? info.accountData.balance : 0;
+                _this.busy = false;
+            });
+        })
+            .catch(function (reason) { return console.error(reason); });
+    };
+    IotaAccountComponent = __decorate([
+        RouteConfig('/iota-account/:account'),
+        Component({
+            selector: 'iotaAccount',
+            inputs: ['account'],
+            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/iota-account/{{vm.account}}\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance: <md-progress-circular md-mode=\"indeterminate\" md-diameter=\"20px\" ng-show=\"vm.busy\"></md-progress-circular>\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} IOTA\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col info-col left\" flex>Transaction Id</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col info-col left\" flex>\n                <span>{{item.txId}}</span>\n              </div>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-iota-transactions layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-iota-transactions>\n      </div>\n    </div>\n  "
+        }),
+        Inject('$scope', 'iotaBlockExplorerService', 'iotaPendingTransactions', '$interval', '$mdToast', 'settings', 'user'),
+        __metadata("design:paramtypes", [Object, IotaBlockExplorerService,
+            IotaPendingTransactionsService, Function, Object, SettingsService,
+            UserService])
+    ], IotaAccountComponent);
+    return IotaAccountComponent;
+}());
 var ExploreAccountComponent = (function () {
     function ExploreAccountComponent($scope, heat, assetInfo, $q, panel) {
         this.$scope = $scope;
@@ -19613,104 +19721,6 @@ var FimkAccountComponent = (function () {
     ], FimkAccountComponent);
     return FimkAccountComponent;
 }());
-var IotaAccountComponent = (function () {
-    function IotaAccountComponent($scope, iotaBlockExplorerService, iotaPendingTransactions, $interval, $mdToast, settings, user) {
-        this.$scope = $scope;
-        this.iotaBlockExplorerService = iotaBlockExplorerService;
-        this.iotaPendingTransactions = iotaPendingTransactions;
-        this.$interval = $interval;
-        this.$mdToast = $mdToast;
-        this.settings = settings;
-        this.user = user;
-        this.pendingTransactions = [];
-        this.prevIndex = 0;
-        this.busy = true;
-    }
-    IotaAccountComponent.prototype.$onInit = function () {
-        var _this = this;
-        this.refresh();
-        var listener = this.updatePendingTransactions.bind(this);
-        this.iotaPendingTransactions.addListener(listener);
-        this.updatePendingTransactions();
-        var promise = this.$interval(this.timerHandler.bind(this), 30000);
-        this.timerHandler();
-        this.$scope.$on('$destroy', function () {
-            _this.iotaPendingTransactions.removeListener(listener);
-            _this.$interval.cancel(promise);
-        });
-    };
-    IotaAccountComponent.prototype.timerHandler = function () {
-        var _this = this;
-        this.refresh();
-        if (this.pendingTransactions.length) {
-            this.iotaBlockExplorerService.getAccountInfo(this.user.currency.secretPhrase)
-                .then(function (recentTransactions) {
-                for (var i = 0; i < _this.pendingTransactions.length; i++) {
-                    var isPending = true;
-                    for (var j = 0; j < recentTransactions.transfers.length; j++) {
-                        if (recentTransactions.transfers[j].hash == _this.pendingTransactions[i].txId) {
-                            isPending = false;
-                            break;
-                        }
-                    }
-                    if (!isPending) {
-                        _this.$mdToast.show(_this.$mdToast.simple().textContent("Transaction with id ".concat(_this.pendingTransactions[i].txId, " found")).hideDelay(2000));
-                        _this.iotaPendingTransactions.remove(_this.pendingTransactions[i].address, _this.pendingTransactions[i].txId, _this.pendingTransactions[i].time);
-                    }
-                }
-            }, function (err) {
-                console.log('Error in getting recent IOTA Transactions ' + err);
-            })
-                .catch(function (reason) { return console.error(reason); });
-        }
-    };
-    IotaAccountComponent.prototype.updatePendingTransactions = function () {
-        var _this = this;
-        this.$scope.$evalAsync(function () {
-            _this.pendingTransactions = [];
-            var addr = _this.user.currency.address;
-            var txns = _this.iotaPendingTransactions.pending[addr];
-            if (txns) {
-                var format = _this.settings.get(SettingsService.DATEFORMAT_DEFAULT);
-                txns.forEach(function (tx) {
-                    _this.pendingTransactions.push({
-                        date: dateFormat(new Date(tx.time), format),
-                        time: tx.time,
-                        txId: tx.txId,
-                        address: addr
-                    });
-                });
-                _this.pendingTransactions.sort(function (a, b) { return b.time - a.time; });
-            }
-        });
-    };
-    IotaAccountComponent.prototype.refresh = function () {
-        var _this = this;
-        this.busy = true;
-        this.balanceUnconfirmed = "";
-        this.iotaBlockExplorerService.getAccountInfo(this.user.currency.secretPhrase)
-            .then(function (info) {
-            _this.$scope.$evalAsync(function () {
-                _this.balanceUnconfirmed = info ? info.accountData.balance : 0;
-                _this.busy = false;
-            });
-        })
-            .catch(function (reason) { return console.error(reason); });
-    };
-    IotaAccountComponent = __decorate([
-        RouteConfig('/iota-account/:account'),
-        Component({
-            selector: 'iotaAccount',
-            inputs: ['account'],
-            template: "\n    <div layout=\"column\" flex layout-fill>\n      <div layout=\"row\" class=\"explorer-detail\">\n        <div layout=\"column\">\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Address:\n            </div>\n            <div class=\"value\">\n              <a href=\"#/iota-account/{{vm.account}}\">{{vm.account}}</a>\n            </div>\n          </div>\n          <div class=\"col-item\">\n            <div class=\"title\">\n              Balance: <md-progress-circular md-mode=\"indeterminate\" md-diameter=\"20px\" ng-show=\"vm.busy\"></md-progress-circular>\n            </div>\n            <div class=\"value\">\n              {{vm.balanceUnconfirmed}} IOTA\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div flex layout=\"column\">\n        <div layout=\"column\" ng-if=\"vm.pendingTransactions.length\">\n          <div layout=\"row\" class=\"trader-component-title\">Pending Transactions</div>\n          <md-list flex layout-fill layout=\"column\">\n            <md-list-item class=\"header\">\n              <div class=\"truncate-col date-col left\">Time</div>\n              <div class=\"truncate-col id-col left\">Status</div>\n              <div class=\"truncate-col info-col left\" flex>Transaction Id</div>\n            </md-list-item>\n            <md-list-item ng-repeat=\"item in vm.pendingTransactions\" class=\"row\">\n              <div class=\"truncate-col date-col left\">{{item.date}}</div>\n              <div class=\"truncate-col id-col left\">\n                Pending&nbsp;<elipses-loading></elipses-loading>\n              </div>\n              <div class=\"truncate-col info-col left\" flex>\n                <span>{{item.txId}}</span>\n              </div>\n            </md-list-item>\n          </md-list>\n          <p></p>\n        </div>\n        <virtual-repeat-iota-transactions layout=\"column\" flex layout-fill account=\"vm.account\"></virtual-repeat-iota-transactions>\n      </div>\n    </div>\n  "
-        }),
-        Inject('$scope', 'iotaBlockExplorerService', 'iotaPendingTransactions', '$interval', '$mdToast', 'settings', 'user'),
-        __metadata("design:paramtypes", [Object, IotaBlockExplorerService,
-            IotaPendingTransactionsService, Function, Object, SettingsService,
-            UserService])
-    ], IotaAccountComponent);
-    return IotaAccountComponent;
-}());
 var LtcAccountComponent = (function () {
     function LtcAccountComponent($scope, ltcBlockExplorerService, ltcPendingTransactions, $interval, $mdToast, settings, user) {
         this.$scope = $scope;
@@ -19803,24 +19813,6 @@ var LtcAccountComponent = (function () {
             UserService])
     ], LtcAccountComponent);
     return LtcAccountComponent;
-}());
-var HomeComponent = (function () {
-    function HomeComponent(user) {
-        this.user = user;
-        user.requireLogin();
-        user.on(UserService.EVENT_UNLOCKED, function () {
-        });
-    }
-    HomeComponent = __decorate([
-        RouteConfig('/home'),
-        Component({
-            selector: 'home',
-            template: "\n    <div layout=\"column\" flex layout-padding layout-fill>\n      <virtual-repeat-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-transactions>\n      <!-- <virtual-repeat-eth-transactions layout=\"column\" flex account=\"vm.user.account\" personalize=\"true\"></virtual-repeat-eth-transactions> -->\n    </div>\n  "
-        }),
-        Inject('user'),
-        __metadata("design:paramtypes", [UserService])
-    ], HomeComponent);
-    return HomeComponent;
 }());
 var EditMessageComponent = (function () {
     function EditMessageComponent($scope, sendmessage, storage, $timeout, user, p2pMessaging, $mdToast) {
@@ -23843,9 +23835,13 @@ var wlt;
             });
         };
         CurrencyBalance.prototype.isZeroBalance = function () {
-            return !CurrencyBalance.hasDigit.test(this._balance);
+            return !CurrencyBalance.hasNoZeroDigit.test(this._balance);
         };
-        CurrencyBalance.hasDigit = /[1-9]/;
+        CurrencyBalance.prototype.hasDigit = function () {
+            return CurrencyBalance.hasDigit.test(this._balance);
+        };
+        CurrencyBalance.hasNoZeroDigit = /[1-9]/;
+        CurrencyBalance.hasDigit = /[0-9]/;
         return CurrencyBalance;
     }());
     wlt.CurrencyBalance = CurrencyBalance;
@@ -24667,7 +24663,9 @@ var WalletComponent = (function (_super) {
         this.allLocked = false;
         var heatAccount = heat.crypto.getAccountIdFromPublicKey(heat.crypto.secretPhraseToPublicKey(walletEntry.secretPhrase));
         var heatCurrencyBalance = new wlt.CurrencyBalance('HEAT', 'HEAT', heatAccount, walletEntry.secretPhrase);
+        heatCurrencyBalance.walletEntry = walletEntry;
         heatCurrencyBalance.visible = walletEntry.expanded;
+        heatCurrencyBalance.pubKey = heat.crypto.secretPhraseToPublicKey(walletEntry.secretPhrase);
         walletEntry.currencies.push(heatCurrencyBalance);
         this.flatten();
         this.heat.api.getAccountByNumericId(heatAccount).then(function (account) {
@@ -24687,7 +24685,6 @@ var WalletComponent = (function (_super) {
         }, function () {
             _this.$scope.$evalAsync(function () {
                 heatCurrencyBalance.balance = "Address is unused";
-                heatCurrencyBalance.symbol = '';
             });
         });
         var selectedCurrencies = this.store.get(walletEntry.account) || [];
@@ -24811,7 +24808,7 @@ var WalletComponent = (function (_super) {
         RouteConfig('/wallet'),
         Component({
             selector: 'wallet',
-            template: "\n   <!--  layout-align=\"start center\" -->\n    <div layout=\"column\"  flex layout-padding>\n      <div layout=\"row\">\n\n        <!-- Open File input is hidden -->\n        <md-button class=\"md-primary md-raised\">\n          <md-tooltip md-direction=\"bottom\">Open wallet file, adds all contents</md-tooltip>\n          <label for=\"walet-input-file\">\n            Import File\n          </label>\n        </md-button>\n        \n        <input type=\"file\" onchange=\"angular.element(this).scope().vm.pageAddFileInputChange(this.files); angular.element(this).val(null)\" class=\"ng-hide\" id=\"walet-input-file\">\n\n        <!-- Adds a wallet seed (heat secret phrase or bip44 eth/btc seed) -->\n        <md-button class=\"md-primary md-raised\" ng-click=\"vm.importSeed()\" aria-label=\"Import Seed\">\n          <md-tooltip md-direction=\"bottom\">Import Seed</md-tooltip>\n          Import Seed/Private Key\n        </md-button>\n\n        <!-- Export Wallet to File -->\n        <md-button class=\"md-warn md-raised\" ng-click=\"vm.exportWallet()\" aria-label=\"Export Wallet\" ng-if=\"!vm.allLocked\">\n          <md-tooltip md-direction=\"bottom\">Export Wallet File</md-tooltip>\n          Export Wallet File\n        </md-button>\n\n        <md-select class=\"wallet-dropdown md-warn md-raised\" placeholder=\"Create Address\" ng-change=\"vm.createAccount($event)\" ng-model=\"vm.selectedChain\">\n          <md-option style=\"height: 30px;\"ng-repeat=\"entry in vm.chains\" value=\"{{entry.name}}\" ng-disabled=\"{{entry.disabled}}\">{{entry.name}}</md-option>\n        </md-select>\n        \n        <md-checkbox ng-model=\"vm.displayUnlocked\" style=\"margin: 8px 26px 0 auto;\">\n          Display unlocked only\n        </md-checkbox>\n        \n        <md-button ng-click=\"vm.unlock($event)\" class=\"md-primary md-raised\" aria-label=\"Unlock account\">\n          Unlock\n        </md-button>\n      </div>\n\n      <div layout=\"column\" layout-fill  flex>\n        <div layout-fill layout=\"column\" class=\"wallet-entries\" flex>\n\n          <!-- Build a wallet structure that contains ::\n                - wallet entries\n                - per entry currency balances\n                - per currency token balances  -->\n\n          <md-list layout-fill layout=\"column\" flex>\n            <md-list-item ng-repeat=\"entry in vm.entries\" ng-if=\"entry.visible && !entry.hidden\" ng-hide=\"entry.isWalletEntry && !entry.unlocked && vm.displayUnlocked\">\n\n              <!-- Wallet entry -->\n              <div ng-if=\"entry.isWalletEntry\" layout=\"row\" class=\"wallet-entry\" flex>\n                <!--\n                <md-checkbox ng-model=\"entry.selected\">\n                  <md-tooltip md-direction=\"bottom\">\n                    Check this to include in wallet export\n                  </md-tooltip>\n                </md-checkbox>\n                -->\n                <md-button class=\"md-icon-button left\" ng-click=\"entry.toggle()\">\n                  <md-icon md-font-library=\"material-icons\">{{entry.expanded?'expand_less':'expand_more'}}</md-icon>\n                </md-button>\n\n                <div flex ng-if=\"entry.secretPhrase\" class=\"identifier\"><a ng-click=\"entry.toggle()\">{{entry.identifier}}</a>\n                  <span class=\"visibleLabel\">{{entry.visibleLabel}}</span>\n                  <span class=\"label\">{{entry.label}}</span>\n                </div>\n                <div flex ng-if=\"!entry.secretPhrase\" class=\"identifier\">\n                  <span>{{entry.identifier}}</span>\n                  <span class=\"visibleLabel\">{{entry.visibleLabel}}</span>\n                </div>\n\n                <md-menu md-position-mode=\"target-right target\" md-offset=\"34px 34px\" ng-if=\"entry.unlocked\">\n                  <md-button aria-label=\"user menu\" class=\"md-icon-button right\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n                    <md-icon md-font-library=\"material-icons\">more_horiz</md-icon>\n                  </md-button>\n                  <md-menu-content width=\"4\">\n                    <!--<span>Account {{entry.account}}</span>-->\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.enterEntryLabel(entry)\">\n                        <md-icon md-font-library=\"material-icons\">label</md-icon>\n                        Enter label\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.showSecret(entry.secretPhrase, entry.symbol)\">\n                        <md-icon md-font-library=\"material-icons\">file_copy</md-icon>\n                        Show private key\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.remove($event, entry)\">\n                        <md-icon md-font-library=\"material-icons\">delete_forever</md-icon>\n                        Remove account\n                      </md-button>\n                    </md-menu-item>\n                    \n                    <md-menu-divider></md-menu-divider>\n\n                    <md-menu-item>\n                      <md-menu>\n                          <md-button ng-click=\"$mdMenu.open()\" style=\"text-transform: none;\">\n                            <md-icon md-font-library=\"material-icons\" style=\"margin-right: 16px;\">restore</md-icon>\n                            Restore addresses\n                          </md-button>\n                          <md-menu-content>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'Bitcoin')\">BTC</md-button>\n                            </md-menu-item>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'Ethereum')\">ETH</md-button>\n                            </md-menu-item>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'Litecoin')\">LTC</md-button>\n                            </md-menu-item>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'BitcoinCash')\">BCH</md-button>\n                            </md-menu-item>\n                          </md-menu-content>\n                      </md-menu>\n                    </md-menu-item>\n                    \n                  </md-menu-content>\n                </md-menu>\n              </div>\n\n              <!-- Currency Balance -->\n              <div ng-if=\"entry.isCurrencyBalance\" layout=\"row\" class=\"currency-balance\" flex>\n                <div class=\"name\">{{entry.name}} <span ng-if=\"entry.index!=undefined\">#{{entry.index}}</span></div>&nbsp;\n                <div class=\"identifier\" flex><a ng-click=\"entry.unlock()\">{{entry.address}}</a></div>&nbsp;\n                <div class=\"balance\" ng-class=\"{'empty':entry.isZeroBalance()}\">\n                  <span class=\"state-message\" ng-if=\"entry.stateMessage\">{{entry.stateMessage}}</span>\n                  <span>{{entry.balance}}</span>\n                  <span ng-if=\"entry.balance\">&nbsp;&nbsp;&nbsp;{{entry.symbol}}</span>\n                </div>\n                <md-menu ng-hide=\"entry.symbol==='HEAT'\" md-position-mode=\"target-right target\" md-offset=\"34px 34px\">\n                  <md-button aria-label=\"user menu\" class=\"md-icon-button right\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n                    <md-icon md-font-library=\"material-icons\">more_horiz</md-icon>\n                  </md-button>\n                  <md-menu-content width=\"4\">\n                    <md-menu-item style=\"height: 26px; min-height: 26px\"><span style=\"text-align: center\">{{entry.name}}</span></md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.showSecret(entry.secretPhrase, entry.symbol)\">\n                        <md-icon md-font-library=\"material-icons\">file_copy</md-icon>\n                        Show private key\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item ng-if=\"entry.index!=undefined\">\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.createAddress(entry.walletEntry, entry.name)\">\n                        <md-icon md-font-library=\"material-icons\">add</md-icon>\n                        Create {{entry.symbol}} address\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.deleteEntry(entry)\">\n                        <md-icon md-font-library=\"material-icons\">delete_forever</md-icon>\n                        Remove address  <span class=\"name\">{{entry.name}} <span ng-if=\"entry.index!=undefined\">#{{entry.index}}</span></span>\n                      </md-button>\n                    </md-menu-item>\n                  </md-menu-content>\n                </md-menu>\n              </div>\n\n              <!-- Currency Address Loading -->\n              <div ng-if=\"entry.isCurrencyAddressLoading\" layout=\"row\" class=\"currency-balance\" flex>\n                <div class=\"name\">{{entry.name}}</div>&nbsp;\n                <div class=\"identifier\" flex>{{entry.address || ''}}  loading ..</div>\n              </div>\n\n              <!-- Currency Address Create -->\n              <div ng-if=\"entry.isCurrencyAddressCreate\" layout=\"row\" class=\"currency-balance\" flex>\n                <div class=\"name\">{{entry.name}}</div>&nbsp;\n                <md-button ng-click=\"entry.createAddressByName(entry)\">Create New</md-button>\n                <md-menu ng-hide=\"entry.symbol==='HEAT'\" md-position-mode=\"target-right target\" md-offset=\"34px 34px\">\n                  <md-button aria-label=\"user menu\" class=\"md-icon-button right\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n                    <md-icon md-font-library=\"material-icons\">menu</md-icon>\n                  </md-button>\n                  <md-menu-content width=\"4\">\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.restoreAddresses(entry)\">\n                        Restore addresses\n                      </md-button>\n                    </md-menu-item>\n                  </md-menu-content>\n                </md-menu>\n                <!--<md-button class=\"name\" ng-click=\"entry.restoreAddresses(entry.component)\">Restore addresses</md-button>-->\n              </div>\n\n              <!-- Token Balance -->\n              <div ng-if=\"entry.isTokenBalance\" layout=\"row\" class=\"token-balance\" flex>\n                <div class=\"name\">{{entry.name}}</div>&nbsp;\n                <div class=\"identifier\" flex>{{entry.address}}</div>&nbsp;\n                <div class=\"balance\">{{entry.balance}}&nbsp;{{entry.symbol}}</div>\n              </div>\n\n            </md-list-item>\n          </md-list>\n        </div>\n      </div>\n    </div>\n  "
+            template: "\n   <!--  layout-align=\"start center\" -->\n    <div layout=\"column\"  flex layout-padding>\n      <div layout=\"row\">\n\n        <!-- Open File input is hidden -->\n        <md-button class=\"md-primary md-raised\">\n          <md-tooltip md-direction=\"bottom\">Open wallet file, adds all contents</md-tooltip>\n          <label for=\"walet-input-file\">\n            Import File\n          </label>\n        </md-button>\n        \n        <input type=\"file\" onchange=\"angular.element(this).scope().vm.pageAddFileInputChange(this.files); angular.element(this).val(null)\" class=\"ng-hide\" id=\"walet-input-file\">\n\n        <!-- Adds a wallet seed (heat secret phrase or bip44 eth/btc seed) -->\n        <md-button class=\"md-primary md-raised\" ng-click=\"vm.importSeed()\" aria-label=\"Import Seed\">\n          <md-tooltip md-direction=\"bottom\">Import Seed</md-tooltip>\n          Import Seed/Private Key\n        </md-button>\n\n        <!-- Export Wallet to File -->\n        <md-button class=\"md-warn md-raised\" ng-click=\"vm.exportWallet()\" aria-label=\"Export Wallet\" ng-if=\"!vm.allLocked\">\n          <md-tooltip md-direction=\"bottom\">Export Wallet File</md-tooltip>\n          Export Wallet File\n        </md-button>\n\n        <md-select class=\"wallet-dropdown md-warn md-raised\" placeholder=\"Create Address\" ng-change=\"vm.createAccount($event)\" ng-model=\"vm.selectedChain\">\n          <md-option style=\"height: 30px;\"ng-repeat=\"entry in vm.chains\" value=\"{{entry.name}}\" ng-disabled=\"{{entry.disabled}}\">{{entry.name}}</md-option>\n        </md-select>\n        \n        <md-checkbox ng-model=\"vm.displayUnlocked\" style=\"margin: 8px 26px 0 auto;\">\n          Display unlocked only\n        </md-checkbox>\n        \n        <md-button ng-click=\"vm.unlock($event)\" class=\"md-primary md-raised\" aria-label=\"Unlock account\">\n          Unlock\n        </md-button>\n      </div>\n\n      <div layout=\"column\" layout-fill  flex>\n        <div layout-fill layout=\"column\" class=\"wallet-entries\" flex>\n\n          <!-- Build a wallet structure that contains ::\n                - wallet entries\n                - per entry currency balances\n                - per currency token balances  -->\n\n          <md-list layout-fill layout=\"column\" flex>\n            <md-list-item ng-repeat=\"entry in vm.entries\" ng-if=\"entry.visible && !entry.hidden\" ng-hide=\"entry.isWalletEntry && !entry.unlocked && vm.displayUnlocked\">\n\n              <!-- Wallet entry -->\n              <div ng-if=\"entry.isWalletEntry\" layout=\"row\" class=\"wallet-entry\" flex>\n                <!--\n                <md-checkbox ng-model=\"entry.selected\">\n                  <md-tooltip md-direction=\"bottom\">\n                    Check this to include in wallet export\n                  </md-tooltip>\n                </md-checkbox>\n                -->\n                <md-button class=\"md-icon-button left\" ng-click=\"entry.toggle()\">\n                  <md-icon md-font-library=\"material-icons\">{{entry.expanded?'expand_less':'expand_more'}}</md-icon>\n                </md-button>\n\n                <div flex ng-if=\"entry.secretPhrase\" class=\"identifier\"><a ng-click=\"entry.toggle()\">{{entry.identifier}}</a>\n                  <span class=\"visibleLabel\">{{entry.visibleLabel}}</span>\n                  <span class=\"label\">{{entry.label}}</span>\n                </div>\n                <div flex ng-if=\"!entry.secretPhrase\" class=\"identifier\">\n                  <span>{{entry.identifier}}</span>\n                  <span class=\"visibleLabel\">{{entry.visibleLabel}}</span>\n                </div>\n\n                <md-menu md-position-mode=\"target-right target\" md-offset=\"34px 34px\" ng-if=\"entry.unlocked\">\n                  <md-button aria-label=\"user menu\" class=\"md-icon-button right\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n                    <md-icon md-font-library=\"material-icons\">more_horiz</md-icon>\n                  </md-button>\n                  <md-menu-content width=\"4\">\n                    <!--<span>Account {{entry.account}}</span>-->\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.enterEntryLabel(entry)\">\n                        <md-icon md-font-library=\"material-icons\">label</md-icon>\n                        Enter label\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.showSecret(entry.secretPhrase, entry.symbol)\">\n                        <md-icon md-font-library=\"material-icons\">file_copy</md-icon>\n                        Show private key\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.remove($event, entry)\">\n                        <md-icon md-font-library=\"material-icons\">delete_forever</md-icon>\n                        Remove account\n                      </md-button>\n                    </md-menu-item>\n                    \n                    <md-menu-divider></md-menu-divider>\n\n                    <md-menu-item>\n                      <md-menu>\n                          <md-button ng-click=\"$mdMenu.open()\" style=\"text-transform: none;\">\n                            <md-icon md-font-library=\"material-icons\" style=\"margin-right: 16px;\">restore</md-icon>\n                            Restore addresses\n                          </md-button>\n                          <md-menu-content>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'Bitcoin')\">BTC</md-button>\n                            </md-menu-item>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'Ethereum')\">ETH</md-button>\n                            </md-menu-item>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'Litecoin')\">LTC</md-button>\n                            </md-menu-item>\n                            <md-menu-item>\n                              <md-button ng-click=\"vm.restoreAddresses(entry, 'BitcoinCash')\">BCH</md-button>\n                            </md-menu-item>\n                          </md-menu-content>\n                      </md-menu>\n                    </md-menu-item>\n                    \n                  </md-menu-content>\n                </md-menu>\n              </div>\n\n              <!-- Currency Balance -->\n              <div ng-if=\"entry.isCurrencyBalance\" layout=\"row\" class=\"currency-balance\" flex>\n                <div class=\"name\">{{entry.name}} <span ng-if=\"entry.index!=undefined\">#{{entry.index}}</span></div>&nbsp;\n                <div class=\"identifier\" flex><a ng-click=\"entry.unlock()\">{{entry.address}}</a></div>&nbsp;\n                <div class=\"balance\" ng-class=\"{'empty':entry.isZeroBalance()}\">\n                  <span class=\"state-message\" ng-if=\"entry.stateMessage\">{{entry.stateMessage}}</span>\n                  <span>{{entry.balance}}</span>\n                  <span ng-if=\"entry.hasDigit()\">&nbsp;&nbsp;&nbsp;{{entry.symbol}}</span>\n                </div>\n                <md-menu md-position-mode=\"target-right target\" md-offset=\"34px 34px\">\n                  <md-button aria-label=\"user menu\" class=\"md-icon-button right\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n                    <md-icon md-font-library=\"material-icons\">more_horiz</md-icon>\n                  </md-button>\n                  <md-menu-content width=\"4\">\n                    <md-menu-item style=\"height: 26px; min-height: 26px\">\n                      <span style=\"text-align: center\">{{entry.name}}  address: {{entry.address}}</span>\n                    </md-menu-item>\n                    <md-menu-item ng-if=\"entry.pubKey\">\n                      <span style=\"font-size: x-small\">Public key:<br>{{entry.pubKey}}</span>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.showSecret(entry.secretPhrase, entry.symbol)\">\n                        <md-icon md-font-library=\"material-icons\">file_copy</md-icon>\n                        Show private key\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item ng-hide=\"entry.symbol==='HEAT'\" ng-if=\"entry.index!=undefined\">\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.createAddress(entry.walletEntry, entry.name)\">\n                        <md-icon md-font-library=\"material-icons\">add</md-icon>\n                        Create {{entry.symbol}} address\n                      </md-button>\n                    </md-menu-item>\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-hide=\"entry.symbol==='HEAT'\" ng-click=\"vm.deleteEntry(entry)\">\n                        <md-icon md-font-library=\"material-icons\">delete_forever</md-icon>\n                        Remove address  <span class=\"name\">{{entry.name}} <span ng-if=\"entry.index!=undefined\">#{{entry.index}}</span></span>\n                      </md-button>\n                    </md-menu-item>\n                  </md-menu-content>\n                </md-menu>\n              </div>\n\n              <!-- Currency Address Loading -->\n              <div ng-if=\"entry.isCurrencyAddressLoading\" layout=\"row\" class=\"currency-balance\" flex>\n                <div class=\"name\">{{entry.name}}</div>&nbsp;\n                <div class=\"identifier\" flex>{{entry.address || ''}}  loading ..</div>\n              </div>\n\n              <!-- Currency Address Create -->\n              <div ng-if=\"entry.isCurrencyAddressCreate\" layout=\"row\" class=\"currency-balance\" flex>\n                <div class=\"name\">{{entry.name}}</div>&nbsp;\n                <md-button ng-click=\"entry.createAddressByName(entry)\">Create New</md-button>\n                <md-menu ng-hide=\"entry.symbol==='HEAT'\" md-position-mode=\"target-right target\" md-offset=\"34px 34px\">\n                  <md-button aria-label=\"user menu\" class=\"md-icon-button right\" ng-click=\"$mdMenu.open($event)\" md-menu-origin >\n                    <md-icon md-font-library=\"material-icons\">menu</md-icon>\n                  </md-button>\n                  <md-menu-content width=\"4\">\n                    <md-menu-item>\n                      <md-button aria-label=\"explorer\" ng-click=\"vm.restoreAddresses(entry)\">\n                        Restore addresses\n                      </md-button>\n                    </md-menu-item>\n                  </md-menu-content>\n                </md-menu>\n                <!--<md-button class=\"name\" ng-click=\"entry.restoreAddresses(entry.component)\">Restore addresses</md-button>-->\n              </div>\n\n              <!-- Token Balance -->\n              <div ng-if=\"entry.isTokenBalance\" layout=\"row\" class=\"token-balance\" flex>\n                <div class=\"name\">{{entry.name}}</div>&nbsp;\n                <div class=\"identifier\" flex>{{entry.address}}</div>&nbsp;\n                <div class=\"balance\">{{entry.balance}}&nbsp;{{entry.symbol}}</div>\n              </div>\n\n            </md-list-item>\n          </md-list>\n        </div>\n      </div>\n    </div>\n  "
         }),
         Inject('$scope', '$q', 'localKeyStore', 'walletFile', '$window', 'lightwalletService', 'heat', 'assetInfo', 'ethplorer', '$mdToast', '$mdDialog', 'clipboard', 'user', 'bitcoreService', 'fimkCryptoService', 'nxtCryptoService', 'ardorCryptoService', 'ltcCryptoService', 'ltcBlockExplorerService', 'bchCryptoService', 'bchBlockExplorerService', 'nxtBlockExplorerService', 'ardorBlockExplorerService', 'mofoSocketService', 'iotaCoreService', 'storage', '$rootScope'),
         __metadata("design:paramtypes", [Object, Function, LocalKeyStoreService,
@@ -26516,4 +26513,4 @@ var ArdorTradesProvider = (function () {
     return ArdorTradesProvider;
 }());
 
-//# sourceMappingURL=../dist/maps/heat-ui-CWXCt7.js.map
+//# sourceMappingURL=../dist/maps/heat-ui-MJ8X45.js.map
