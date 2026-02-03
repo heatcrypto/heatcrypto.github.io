@@ -12075,8 +12075,8 @@ var SettingsService = (function () {
     function SettingsService(env, http) {
         this.env = env;
         this.http = http;
-        this.VERSION = "%BUILD_OVERRIDE_VERSION%";
-        this.BUILD = "%BUILD_OVERRIDE_BUILD%";
+        this.VERSION = "4.9.4";
+        this.BUILD = "2026-02-03";
         this.failoverEnabled = true;
         this.values = {};
         this.applyFailoverConfig();
@@ -12325,9 +12325,9 @@ var SettingsService = (function () {
         });
     };
     var SettingsService_1;
-    SettingsService.BUILD_NUM = "%BUILD_OVERRIDE_NUM%";
-    SettingsService.EMBEDDED_HEATLEDGER_VERSION = "%BUILD_OVERRIDE_HEATLEDGER_VERSION%";
-    SettingsService.EMBEDDED_HEATLEDGER_BUILD_DATE = "%BUILD_OVERRIDE_HEATLEDGER_BUILD_DATE%";
+    SettingsService.BUILD_NUM = "build #3";
+    SettingsService.EMBEDDED_HEATLEDGER_VERSION = "4.4.2";
+    SettingsService.EMBEDDED_HEATLEDGER_BUILD_DATE = "2026-01-10";
     SettingsService.DATEFORMAT_DEFAULT = 'settings.dateformat_default';
     SettingsService.TIMEFORMAT_DEFAULT = 'settings.timeformat_default';
     SettingsService.APPLICATION_NAME = 'settings.application_name';
